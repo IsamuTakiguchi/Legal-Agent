@@ -163,7 +163,13 @@ async function loadStatus() {
   box.querySelectorAll("button[data-login]").forEach(b => b.addEventListener("click", () => startLogin(b.dataset.login, false)));
   box.querySelectorAll("button[data-login-manual]").forEach(b => b.addEventListener("click", () => startLogin(b.dataset.loginManual, true)));
   box.querySelectorAll("button[data-autoconf]").forEach(b => b.addEventListener("click", () => startAutoconf(b.dataset.autoconf)));
-  $("#indexInfo").textContent = `${st.index.documents} 冊 / ${st.index.pages} ページ` + (st.indexing ? "（更新中…）" : "") + (st.pdf_dirs.length ? "" : "（PDF_DIRS 未設定）");
+  let idx = `${st.index.documents} 冊 / ${st.index.pages} ページ` + (st.indexing ? "（更新中…）" : "") + (st.pdf_dirs.length ? "" : "（PDF_DIRS 未設定）");
+  for (const d of (st.pdf_dirs_status || [])) {
+    const name = d.path.split(/[\\/]/).filter(Boolean).pop() || d.path;
+    if (!d.exists) idx += `<div class="err">「${esc(name)}」が見つかりません（OneDrive にサインインしているか確認）</div>`;
+    else if (d.cloud_only > 0) idx += `<div>「${esc(name)}」: 未ダウンロード ${d.cloud_only} 冊（索引時に取得）</div>`;
+  }
+  $("#indexInfo").innerHTML = idx;
   if (st.indexing) setTimeout(loadStatus, 5000);
 }
 async function startLogin(site, manual) {

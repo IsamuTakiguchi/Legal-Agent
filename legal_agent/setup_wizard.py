@@ -47,12 +47,47 @@ def _write_env(path: Path, env: dict[str, str]) -> None:
         pass
 
 
+def choose_pdf_dirs(current: str = "", ask=_ask, out=print) -> str:
+    """OneDrive の同期フォルダを検出し、PDF を含むフォルダを番号で選ばせる。見つからなければ手入力。"""
+    from .onedrive import describe_dir, detect_onedrive_roots, list_pdf_folders, strip_quotes
+
+    candidates: list[tuple[Path, int]] = []
+    for root in detect_onedrive_roots():
+        candidates.extend(list_pdf_folders(root))
+    chosen: list[Path] = []
+    if candidates:
+        out("\n書籍 PDF のフォルダ（OneDrive 内で PDF が見つかったフォルダ）:")
+        for i, (p, n) in enumerate(candidates, start=1):
+            out(f"  {i:2d}. {p}（PDF {n} 件）")
+        out("   0. 別のフォルダをパスで指定する")
+        raw = ask("番号を入力（複数はカンマ区切り）", current or "1")
+        nums = [s.strip() for s in raw.replace("，", ",").split(",") if s.strip()]
+        if all(s.isdigit() for s in nums) and nums and nums != ["0"]:
+            for s in nums:
+                i = int(s)
+                if 1 <= i <= len(candidates):
+                    chosen.append(candidates[i - 1][0])
+        elif nums and not all(s.isdigit() for s in nums):
+            chosen = [Path(strip_quotes(s)).expanduser() for s in raw.split(",") if strip_quotes(s)]
+    if not chosen:
+        raw = ask("書籍 PDF のフォルダをパスで入力（複数はカンマ区切り。無ければ空）", current)
+        chosen = [Path(strip_quotes(s)).expanduser() for s in raw.split(",") if strip_quotes(s)]
+    for p in chosen:
+        info = describe_dir(p)
+        if not info["exists"]:
+            out(f"  注意: {p} が見つかりません（OneDrive にサインインしているか確認してください）")
+        else:
+            note = f"、うちクラウドのみ {info['cloud_only']} 件（索引時に順次ダウンロードされます）" if info["cloud_only"] else ""
+            out(f"  {p}: PDF {info['pdfs']} 件{note}")
+    return ",".join(str(p) for p in chosen)
+
+
 def run_setup(non_interactive: bool = False) -> None:
     print("=== Legal-Agent セットアップ ===")
     env = _read_env(ENV_PATH)
     if not non_interactive:
         env["ANTHROPIC_API_KEY"] = _ask("Anthropic API キー", env.get("ANTHROPIC_API_KEY", ""), secret=True)
-        env["LEGAL_AGENT_PDF_DIRS"] = _ask("書籍 PDF のフォルダ（複数はカンマ区切り。無ければ空）", env.get("LEGAL_AGENT_PDF_DIRS", ""))
+        env["LEGAL_AGENT_PDF_DIRS"] = choose_pdf_dirs(env.get("LEGAL_AGENT_PDF_DIRS", ""))
         sites = []
         if env.get("LEGAL_AGENT_TKC_ENABLED", "").lower() == "true":
             sites.append(("tkc", "TKC ローライブラリー"))

@@ -16,6 +16,7 @@ from .agent.runner import AgentRunner
 from .agent.sessions import SessionStore
 from .config import Settings, get_settings
 from .index.indexer import index_dirs
+from .onedrive import describe_dir
 from .sources.registry import SourceRegistry
 
 log = logging.getLogger(__name__)
@@ -102,6 +103,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "indexing": bg["indexing"],
             "index_result": bg["index_result"],
             "pdf_dirs": [str(p) for p in settings.pdf_dirs],
+            "pdf_dirs_status": await asyncio.to_thread(lambda: [describe_dir(p) for p in settings.pdf_dirs]),
             "auto_configure": settings.auto_configure,
             "limits": {
                 "max_searches_per_source": settings.max_searches_per_source,

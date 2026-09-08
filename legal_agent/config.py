@@ -3,9 +3,10 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Annotated
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -19,7 +20,8 @@ class Settings(BaseSettings):
     # Claude Opus 5 / Fable のポリシー拒否時にサーバ側で別モデルへ切替（beta）
     fallbacks_enabled: bool = True
 
-    pdf_dirs: list[Path] = Field(default_factory=list)
+    # 環境変数はカンマ区切りの文字列（JSON ではない）。NoDecode で自前の分割に任せる
+    pdf_dirs: Annotated[list[Path], NoDecode] = Field(default_factory=list)
     data_dir: Path = Path("./data")
 
     host: str = "127.0.0.1"

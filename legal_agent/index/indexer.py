@@ -9,6 +9,7 @@ from typing import Callable, Iterable
 
 import pymupdf
 
+from ..onedrive import is_cloud_only
 from .db import IndexDB
 
 
@@ -43,13 +44,18 @@ def extract_pages(path: Path) -> tuple[dict, list[tuple[int, str]]]:
     return meta, pages
 
 
+def _is_temp(p: Path) -> bool:
+    # OneDrive / Office の一時ファイルや隠しファイルは除外
+    return p.name.startswith("~$") or p.name.startswith(".") or p.suffix.lower() == ".tmp"
+
+
 def iter_pdfs(dirs: Iterable[Path]) -> Iterable[Path]:
     for d in dirs:
         d = Path(d)
         if d.is_file() and d.suffix.lower() == ".pdf":
             yield d
         elif d.is_dir():
-            yield from sorted(p for p in d.rglob("*.pdf") if p.is_file())
+            yield from sorted(p for p in d.rglob("*") if p.suffix.lower() == ".pdf" and p.is_file() and not _is_temp(p))
 
 
 def index_dirs(
@@ -63,12 +69,19 @@ def index_dirs(
     for pdf in iter_pdfs(dirs):
         doc_id = doc_id_for(pdf)
         seen.add(doc_id)
-        st = pdf.stat()
+        try:
+            st = pdf.stat()
+        except OSError as e:
+            failed += 1
+            log(f"失敗: {pdf}: {e}")
+            continue
         existing = db.get_document(doc_id)
         if existing and not rebuild and existing["mtime"] == st.st_mtime and existing["size"] == st.st_size:
             skipped += 1
             continue
         try:
+            if is_cloud_only(pdf):
+                log(f"OneDrive からダウンロード中（クラウドのみのファイル）: {pdf.name}")
             meta, pages = extract_pages(pdf)
             title, author = guess_title(pdf, meta)
             n = db.add_document(doc_id, str(pdf.resolve()), title, author, "", st.st_mtime, st.st_size, pages)
