@@ -7,8 +7,9 @@ from ..browser.session import BrowserSession
 from ..config import Settings
 from .base import Source
 from .courts import CourtsSource
-from .legal_library import LegalLibraryLinkSource, LegalLibrarySource
+from .legal_library import LegalLibrarySource
 from .local_pdf import LocalPDFSource
+from .on_hold import legal_library_on_hold, tkc_on_hold
 from .tkc import TKCSource
 
 CASE_SOURCES = ("courts", "tkc")
@@ -21,10 +22,10 @@ class SourceRegistry:
         self.browser = BrowserSession(settings)
         self.local = LocalPDFSource(settings)
         self.courts = CourtsSource(settings)
-        self.tkc = TKCSource(settings, self.browser)
-        # LEGAL LIBRARY は規約第 8 条により既定でリンク案内のみ（sources/legal_library.py 参照）
+        # TKC / LEGAL LIBRARY は利用規約の確認結果を踏まえ既定で保留（sources/on_hold.py, docs/TERMS_REVIEW.md 参照）
+        self.tkc: Source = TKCSource(settings, self.browser) if settings.tkc_enabled else tkc_on_hold()
         self.legal_library: Source = (
-            LegalLibrarySource(settings, self.browser) if settings.legal_library_enabled else LegalLibraryLinkSource(settings)
+            LegalLibrarySource(settings, self.browser) if settings.legal_library_enabled else legal_library_on_hold()
         )
         self._all: dict[str, Source] = {
             "courts": self.courts,

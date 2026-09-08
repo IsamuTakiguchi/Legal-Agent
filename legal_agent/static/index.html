@@ -145,7 +145,7 @@ async function loadStatus() {
   for (const name of SOURCE_ORDER) {
     const s = st.sources[name]; if (!s) continue;
     const saved = localStorage.getItem("src:" + name);
-    const checked = saved === null ? true : saved === "1";
+    const checked = saved === null ? (s.available || s.requires_login) : saved === "1";  // 保留中のソースは既定でオフ
     const dot = s.requires_login ? (s.logged_in === true ? "ok" : (s.logged_in === false ? "ng" : "")) : (s.available ? "ok" : "ng");
     const el = document.createElement("label"); el.className = "src";
     let extra = "";

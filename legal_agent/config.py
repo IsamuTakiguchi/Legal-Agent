@@ -36,9 +36,11 @@ class Settings(BaseSettings):
     legal_library_user: str = ""
     legal_library_password: str = ""
 
-    # LEGAL LIBRARY は利用規約第 8 条で「自動化された手段によるアクセス」「AI 等の使用」を禁じているため既定で無効。
-    # 無効時はアプリからサイトへ一切アクセスせず、利用者が自分で検索するためのリンクを案内するだけになる。
-    # 運営会社（株式会社 Legal Technology）から書面で許諾を得た場合のみ true にすること。
+    # 契約サービスは利用規約の確認結果（docs/TERMS_REVIEW.md）を踏まえ、既定で「保留」。
+    # 保留中はアプリからサイトへ一切アクセスせず、利用者が自分で検索するためのリンクを案内するだけになる。
+    # - LEGAL LIBRARY: 第 8 条で自動化手段によるアクセス・AI 等の使用を明文で禁止。運営会社の許諾を得た場合のみ true
+    # - TKC ローライブラリー: 明文禁止はないが 9-1（複製・目的外利用）との関係と個別規約が未確認。確認後に true
+    tkc_enabled: bool = False
     legal_library_enabled: bool = False
 
     # 起動時の自動処理

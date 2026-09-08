@@ -145,7 +145,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if site not in LOGIN_SITES:
             raise HTTPException(404, "対象は tkc / legal_library です")
         if site not in registry.login_sites():
-            raise HTTPException(400, f"{site} は利用規約によりアプリからアクセスしない設定です（README の「利用規約の確認結果」参照）")
+            raise HTTPException(400, f"{site} は保留中で、アプリからはアクセスしません（README の「利用規約の確認結果」参照）")
 
     @app.post("/api/login/{site}")
     async def login(site: str, request: Request) -> dict[str, Any]:

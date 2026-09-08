@@ -19,21 +19,18 @@ def test_status_and_sessions(client):
     st = c.get("/api/status").json()
     assert st["model"] == "claude-opus-5"
     assert set(st["sources"]) == {"courts", "tkc", "local", "legal_library"}
-    assert st["sources"]["tkc"]["requires_login"] is True
     assert st["index"]["documents"] == 0
     assert c.get("/api/sessions").json() == []
     assert c.get("/api/sessions/none").status_code == 404
     assert c.get("/pdf/none").status_code == 404
     assert c.post("/api/login/other").status_code == 404
-    assert c.get("/api/login/tkc").json() == {"waiting": False, "logged_in": None, "result": None, "error": None}
     assert c.post("/api/autoconf/other", json={}).status_code == 404
-    # LEGAL LIBRARY は既定で規約によりアクセスしない → ログイン・自動設定は 400
-    assert c.get("/api/autoconf/legal_library").status_code == 400
-    assert c.post("/api/login/legal_library").status_code == 400
-    assert st["sources"]["legal_library"]["available"] is False and st["sources"]["legal_library"]["requires_login"] is False
-    ac = c.get("/api/autoconf/tkc").json()
-    assert ac["waiting"] is False and ac["running"] is False
-    assert st["sources"]["tkc"]["auto_login"] is False and st["sources"]["tkc"]["configured"] is False
+    # TKC / LEGAL LIBRARY は既定で保留 → ログイン・自動設定は 400
+    for site in ("tkc", "legal_library"):
+        assert c.get(f"/api/autoconf/{site}").status_code == 400
+        assert c.post(f"/api/login/{site}").status_code == 400
+        assert st["sources"][site]["available"] is False and st["sources"][site]["requires_login"] is False
+        assert "保留" in st["sources"][site]["detail"]
     assert st["indexing"] is False and st["auto_configure"] is True
     assert c.get("/").status_code == 200 and "Legal-Agent" in c.get("/").text
 
