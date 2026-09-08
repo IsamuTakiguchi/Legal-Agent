@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Legal-Agent</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%276%27 fill=%27%232f5d8a%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-size=%2718%27 text-anchor=%27middle%27 fill=%27white%27 font-family=%27sans-serif%27%3E法%3C/text%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #f6f5f1; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6a66; --line: #e2dfd6;
+    --accent: #2f5d8a; --accent-ink: #ffffff; --chip: #eef3f8; --warn: #9a3b1c; --ok: #2c7a4b;
+    --user: #e9eef5; --tool: #f3f1ea; --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #15171a; --panel: #1e2126; --ink: #ecebe6; --muted: #a09e97; --line: #2e3238;
+      --accent: #7fb0e0; --accent-ink: #0f1a26; --chip: #26313d; --user: #262c35; --tool: #23262b; --ok: #6fc38f; --warn: #e28b6b; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic", system-ui, sans-serif; background: var(--bg); color: var(--ink); font-size: 14px; height: 100vh; display: grid; grid-template-rows: auto 1fr; }
+  header { display: flex; align-items: center; gap: 12px; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
+  header h1 { font-size: 16px; margin: 0 8px 0 0; }
+  header .model { color: var(--muted); font-size: 12px; }
+  .sources { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+  .src { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; background: var(--chip); font-size: 12px; }
+  .src input { margin: 0; }
+  .src .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .src .dot.ok { background: var(--ok); } .src .dot.ng { background: var(--warn); }
+  .src button { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--accent); background: transparent; color: var(--accent); cursor: pointer; }
+  main { display: grid; grid-template-columns: 220px 1fr 340px; min-height: 0; }
+  aside, section { min-height: 0; overflow: auto; }
+  aside { border-right: 1px solid var(--line); padding: 10px; background: var(--panel); }
+  aside h2, .cites h2 { font-size: 12px; color: var(--muted); margin: 6px 0; text-transform: uppercase; letter-spacing: .05em; }
+  aside button.new { width: 100%; padding: 6px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); cursor: pointer; margin-bottom: 8px; }
+  .sess { padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sess:hover, .sess.active { background: var(--chip); }
+  .chat { display: grid; grid-template-rows: 1fr auto; }
+  .log { padding: 16px 20px; overflow: auto; }
+  .msg { max-width: 860px; margin: 0 auto 14px; padding: 10px 14px; border-radius: 10px; line-height: 1.7; }
+  .msg.user { background: var(--user); white-space: pre-wrap; }
+  .msg.assistant { background: var(--panel); border: 1px solid var(--line); }
+  .msg.assistant h1, .msg.assistant h2, .msg.assistant h3 { font-size: 15px; margin: 12px 0 4px; }
+  .msg.assistant p { margin: 6px 0; } .msg.assistant ul, .msg.assistant ol { margin: 4px 0 4px 20px; padding: 0; }
+  .msg.assistant code { font-family: var(--mono); font-size: 12px; background: var(--chip); padding: 1px 4px; border-radius: 3px; }
+  .activity { max-width: 860px; margin: 0 auto 10px; font-size: 12px; color: var(--muted); }
+  .activity details { background: var(--tool); border-radius: 8px; padding: 6px 10px; margin-bottom: 4px; }
+  .activity summary { cursor: pointer; }
+  .activity .hit { padding: 2px 0 2px 12px; }
+  .thinking { max-width: 860px; margin: 0 auto 8px; font-size: 12px; color: var(--muted); white-space: pre-wrap; border-left: 3px solid var(--line); padding-left: 10px; max-height: 120px; overflow: auto; }
+  .cite { display: inline-block; background: var(--chip); color: var(--accent); border-radius: 4px; padding: 0 5px; font-size: 11px; cursor: pointer; text-decoration: none; vertical-align: 1px; }
+  .cite.unknown { color: var(--warn); }
+  .compose { border-top: 1px solid var(--line); background: var(--panel); padding: 10px 20px; }
+  .compose form { max-width: 860px; margin: 0 auto; display: flex; gap: 8px; align-items: flex-end; }
+  textarea { flex: 1; min-height: 60px; max-height: 200px; resize: vertical; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; }
+  .compose button { padding: 10px 18px; border-radius: 8px; border: none; background: var(--accent); color: var(--accent-ink); cursor: pointer; font-weight: 600; }
+  .compose button:disabled { opacity: .5; cursor: default; }
+  .cites { border-left: 1px solid var(--line); padding: 10px 12px; background: var(--panel); }
+  .cite-item { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; font-size: 12px; }
+  .cite-item .n { font-weight: 700; color: var(--accent); margin-right: 4px; }
+  .cite-item .t { font-weight: 600; }
+  .cite-item .s { color: var(--muted); }
+  .cite-item .x { margin-top: 4px; color: var(--muted); }
+  .cite-item a { color: var(--accent); }
+  .cite-item.flash { outline: 2px solid var(--accent); }
+  .err { color: var(--warn); }
+  .hint { color: var(--muted); font-size: 12px; max-width: 860px; margin: 0 auto 10px; }
+  .status-line { font-size: 11px; color: var(--muted); margin-top: 6px; max-width: 860px; margin-left: auto; margin-right: auto; }
+  @media (max-width: 1000px) { main { grid-template-columns: 1fr; } aside, .cites { display: none; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Legal-Agent</h1>
+  <span class="model" id="model"></span>
+  <div class="sources" id="sources"></div>
+</header>
+<main>
+  <aside>
+    <button class="new" id="newSession">＋ 新しい調査</button>
+    <h2>履歴</h2>
+    <div id="sessions"></div>
+    <h2 style="margin-top:14px">書籍索引</h2>
+    <div id="indexInfo" style="font-size:12px;color:var(--muted)"></div>
+    <button id="reindex" style="margin-top:6px;font-size:12px">索引を更新</button>
+  </aside>
+  <section class="chat">
+    <div class="log" id="log">
+      <div class="hint">質問例: 「整理解雇の四要件について、近年の裁判例と手持ちの書籍の解説を踏まえて整理して」。回答中の [番号] は右の出典パネルに対応します。</div>
+    </div>
+    <div class="compose">
+      <form id="form">
+        <textarea id="input" placeholder="調査したい論点を入力（Shift+Enter で改行、Enter で送信）"></textarea>
+        <button id="send" type="submit">送信</button>
+      </form>
+      <div class="status-line" id="statusLine"></div>
+    </div>
+  </section>
+  <section class="cites">
+    <h2>出典</h2>
+    <div id="cites"><div class="hint">回答が生成されると、引用した判例・文献がここに並びます。</div></div>
+  </section>
+</main>
+<script>
+const $ = (s) => document.querySelector(s);
+const state = { sessionId: null, hits: {}, busy: false, sources: {} };
+const SOURCE_ORDER = ["courts", "tkc", "local", "legal_library"];
+
+function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+// --- 最小限の Markdown → HTML（見出し・箇条書き・太字・コード・段落） ---
+function inline(s) {
+  s = esc(s);
+  s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
+  s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  s = s.replace(/\[\[\s*([a-z_]+:[^\]\s]+?)\s*\]\]/g, (m, ref) => citeChip(ref));
+  s = s.replace(/\[(\d{1,3})\]/g, (m, n) => `<a class="cite" href="#cite-${n}" data-n="${n}">[${n}]</a>`);
+  return s;
+}
+function citeChip(ref) {
+  const h = state.hits[ref];
+  if (!h) return `<span class="cite unknown" title="未検索の出典">[${esc(ref)}]</span>`;
+  return `<span class="cite" title="${esc(h.title)}">[${esc(h.title.slice(0, 18))}…]</span>`;
+}
+function md(text) {
+  const lines = text.split("\n"); let html = ""; let list = null; let para = [];
+  const flush = () => { if (para.length) { html += `<p>${inline(para.join("\n")).replace(/\n/g, "<br>")}</p>`; para = []; } };
+  const closeList = () => { if (list) { html += `</${list}>`; list = null; } };
+  for (const raw of lines) {
+    const line = raw.replace(/\s+$/, "");
+    let m;
+    if ((m = line.match(/^(#{1,4})\s+(.*)$/))) { flush(); closeList(); html += `<h${m[1].length + 1}>${inline(m[2])}</h${m[1].length + 1}>`; }
+    else if ((m = line.match(/^\s*[-*・]\s+(.*)$/))) { flush(); if (list !== "ul") { closeList(); list = "ul"; html += "<ul>"; } html += `<li>${inline(m[1])}</li>`; }
+    else if ((m = line.match(/^\s*\d+[.．)]\s+(.*)$/))) { flush(); if (list !== "ol") { closeList(); list = "ol"; html += "<ol>"; } html += `<li>${inline(m[1])}</li>`; }
+    else if (line.trim() === "") { flush(); closeList(); }
+    else { closeList(); para.push(line); }
+  }
+  flush(); closeList(); return html;
+}
+
+// --- 状態表示 ---
+async function loadStatus() {
+  const st = await (await fetch("/api/status")).json();
+  $("#model").textContent = `${st.model} / effort=${st.effort}`;
+  state.sources = st.sources;
+  const box = $("#sources"); box.innerHTML = "";
+  for (const name of SOURCE_ORDER) {
+    const s = st.sources[name]; if (!s) continue;
+    const saved = localStorage.getItem("src:" + name);
+    const checked = saved === null ? true : saved === "1";
+    const dot = s.requires_login ? (s.logged_in === true ? "ok" : (s.logged_in === false ? "ng" : "")) : (s.available ? "ok" : "ng");
+    const el = document.createElement("label"); el.className = "src";
+    el.innerHTML = `<input type="checkbox" data-src="${name}" ${checked ? "checked" : ""}><span class="dot ${dot}"></span>${esc(s.label)}<span style="color:var(--muted)">${esc(s.detail || "")}</span>` +
+      (s.requires_login ? ` <button type="button" data-login="${name}">ログイン</button>` : "");
+    box.appendChild(el);
+  }
+  box.querySelectorAll("input[data-src]").forEach(i => i.addEventListener("change", e => localStorage.setItem("src:" + e.target.dataset.src, e.target.checked ? "1" : "0")));
+  box.querySelectorAll("button[data-login]").forEach(b => b.addEventListener("click", () => startLogin(b.dataset.login)));
+  $("#indexInfo").textContent = `${st.index.documents} 冊 / ${st.index.pages} ページ` + (st.pdf_dirs.length ? "" : "（PDF_DIRS 未設定）");
+}
+async function startLogin(site) {
+  const r = await (await fetch(`/api/login/${site}`, { method: "POST" })).json();
+  setStatus(r.message);
+  const timer = setInterval(async () => {
+    const s = await (await fetch(`/api/login/${site}`)).json();
+    if (!s.waiting) { clearInterval(timer); setStatus(s.logged_in ? `${site}: ログイン済み` : `${site}: ログインを確認できませんでした`); loadStatus(); }
+  }, 3000);
+}
+function setStatus(t) { $("#statusLine").textContent = t; }
+function enabledSources() { return [...document.querySelectorAll("input[data-src]")].filter(i => i.checked).map(i => i.dataset.src); }
+
+// --- セッション ---
+async function loadSessions() {
+  const list = await (await fetch("/api/sessions")).json();
+  const box = $("#sessions"); box.innerHTML = "";
+  for (const s of list) {
+    const d = document.createElement("div"); d.className = "sess" + (s.id === state.sessionId ? " active" : "");
+    d.textContent = s.title; d.title = s.title; d.onclick = () => openSession(s.id); box.appendChild(d);
+  }
+}
+async function openSession(id) {
+  const s = await (await fetch(`/api/sessions/${id}`)).json();
+  state.sessionId = s.id; state.hits = {};
+  const log = $("#log"); log.innerHTML = "";
+  let lastCites = [];
+  for (const t of s.turns) {
+    if (t.role === "user") addUser(t.text);
+    else { const el = addAssistant(); el.innerHTML = md(t.text); lastCites = t.citations || []; }
+  }
+  renderCites(lastCites); loadSessions();
+}
+$("#newSession").onclick = () => { state.sessionId = null; state.hits = {}; $("#log").innerHTML = ""; renderCites([]); loadSessions(); };
+
+// --- 表示部品 ---
+function addUser(text) { const d = document.createElement("div"); d.className = "msg user"; d.textContent = text; $("#log").appendChild(d); scroll(); return d; }
+function addAssistant() { const d = document.createElement("div"); d.className = "msg assistant"; $("#log").appendChild(d); return d; }
+function scroll() { const l = $("#log"); l.scrollTop = l.scrollHeight; }
+function renderCites(cites) {
+  const box = $("#cites"); box.innerHTML = "";
+  if (!cites.length) { box.innerHTML = '<div class="hint">引用はありません。</div>'; return; }
+  for (const c of cites) {
+    const d = document.createElement("div"); d.className = "cite-item"; d.id = `cite-${c.number}`;
+    const url = c.url ? `<a href="${esc(c.url)}" target="_blank" rel="noopener">${c.source === "local" ? "PDF を開く" : "原典を開く"}</a>` : "";
+    d.innerHTML = `<span class="n">[${c.number}]</span><span class="t">${esc(c.title)}</span><div class="s">${esc(c.subtitle || "")}</div>` +
+      (c.snippet ? `<div class="x">${esc(c.snippet)}</div>` : "") + `<div class="x">${esc(labelOf(c.source))} ${url}</div>`;
+    box.appendChild(d);
+  }
+}
+function labelOf(src) { return (state.sources[src] && state.sources[src].label) || src; }
+document.addEventListener("click", e => {
+  const a = e.target.closest("a.cite"); if (!a) return;
+  e.preventDefault(); const el = document.getElementById(`cite-${a.dataset.n}`);
+  if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 1500); }
+});
+
+// --- 送信と SSE 受信 ---
+$("#form").onsubmit = async (e) => {
+  e.preventDefault();
+  const text = $("#input").value.trim(); if (!text || state.busy) return;
+  $("#input").value = ""; state.busy = true; $("#send").disabled = true;
+  addUser(text);
+  const activity = document.createElement("div"); activity.className = "activity"; $("#log").appendChild(activity);
+  const think = document.createElement("div"); think.className = "thinking"; think.hidden = true; $("#log").appendChild(think);
+  const out = addAssistant(); let buf = ""; let curTool = null;
+  setStatus("調査中…");
+  try {
+    const res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text, session_id: state.sessionId, sources: enabledSources() }) });
+    const reader = res.body.getReader(); const dec = new TextDecoder(); let pending = "";
+    while (true) {
+      const { value, done } = await reader.read(); if (done) break;
+      pending += dec.decode(value, { stream: true });
+      let idx;
+      while ((idx = pending.indexOf("\n\n")) >= 0) {
+        const chunk = pending.slice(0, idx); pending = pending.slice(idx + 2);
+        const line = chunk.split("\n").find(l => l.startsWith("data: ")); if (!line) continue;
+        const ev = JSON.parse(line.slice(6));
+        switch (ev.type) {
+          case "start": state.sessionId = ev.session_id; break;
+          case "thinking": think.hidden = false; think.textContent += ev.text; think.scrollTop = think.scrollHeight; break;
+          case "text_delta": buf += ev.text; out.innerHTML = md(buf); scroll(); break;
+          case "tool_call": {
+            curTool = document.createElement("details"); curTool.open = true;
+            const inp = Object.entries(ev.input).filter(([k, v]) => v).map(([k, v]) => `${k}=${Array.isArray(v) ? v.join(",") : v}`).join(" ");
+            curTool.innerHTML = `<summary>🔎 ${esc(ev.name)}: ${esc(inp)}</summary>`; activity.appendChild(curTool); scroll(); break; }
+          case "tool_progress": setStatus(ev.message); break;
+          case "tool_result": {
+            for (const h of ev.hits) state.hits[h.ref] = h;
+            if (curTool) {
+              const box = document.createElement("div");
+              box.innerHTML = `<div class="hit">${esc(labelOf(ev.source))}: ${ev.count} 件${ev.fetched ? "（本文取得）" : ""}</div>` +
+                ev.hits.slice(0, 10).map(h => `<div class="hit">・${esc(h.title)} <span style="color:var(--muted)">${esc(h.subtitle || "")}</span></div>`).join("");
+              curTool.appendChild(box); curTool.open = false;
+            }
+            break; }
+          case "login_required": setStatus(`${labelOf(ev.site)} は未ログインです。右上の「ログイン」から手動でログインしてください。`); loadStatus(); break;
+          case "memo_saved": setStatus(`メモを保存しました: ${ev.path}`); break;
+          case "done": out.innerHTML = md(ev.text); renderCites(ev.citations); state.sessionId = ev.session_id;
+            setStatus(ev.usage ? `完了（入力 ${ev.usage.input} / 出力 ${ev.usage.output} トークン）` : "完了"); break;
+          case "error": out.innerHTML += `<p class="err">エラー: ${esc(ev.message)}</p>`; setStatus("エラー"); break;
+        }
+      }
+    }
+  } catch (err) { out.innerHTML += `<p class="err">通信エラー: ${esc(err.message)}</p>`; }
+  finally { state.busy = false; $("#send").disabled = false; loadSessions(); scroll(); }
+};
+$("#input").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("#form").requestSubmit(); } });
+$("#reindex").onclick = async () => { setStatus("索引を更新中…"); const r = await fetch("/api/index", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+  const j = await r.json(); setStatus(r.ok ? `索引更新: 追加 ${j.added} / 変更なし ${j.skipped} / 失敗 ${j.failed}` : `索引エラー: ${j.detail}`); loadStatus(); };
+
+loadStatus(); loadSessions();
+</script>
+</body>
+</html>

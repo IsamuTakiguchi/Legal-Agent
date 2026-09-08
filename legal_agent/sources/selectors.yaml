@@ -1,0 +1,61 @@
+# TKC ローライブラリー / LEGAL LIBRARY のブラウザ操作設定。
+#
+# 両サイトは API を提供しておらず、ログイン後の画面構造はこのリポジトリの開発環境からは確認できていない。
+# ここに書いたセレクタは「一般的な構造の推定」であり、初回はご自身の PC で
+#   LEGAL_AGENT_DEBUG_DUMP=1 python -m legal_agent search-cases "解雇" --source tkc
+# などを実行し、data/debug/ に保存される HTML / スクリーンショットを見て調整すること。
+#
+# 各キーの意味:
+#   login_url            : 手動ログイン用に開く URL
+#   check_url            : ログイン状態確認のため開く URL（未ログインならログイン画面へ飛ばされる想定）
+#   login_url_pattern    : 現在 URL がこれに一致すれば「未ログイン」
+#   login_form_selector  : これが存在すれば「未ログイン」
+#   logged_in_selector   : これが存在すれば「ログイン済み」
+#   search.url           : 検索画面 URL。{query} を含めれば URL 直接指定で検索（フォーム操作を省略）
+#   search.input/submit  : 検索語入力欄と検索ボタン
+#   search.results_wait  : 結果が描画されたと見なす要素
+#   search.row           : 結果 1 件の要素。row_title/row_link/row_meta はその内側のセレクタ
+#   detail.content       : 本文を innerText で取得する要素
+#   detail.wait          : 本文ページで待つ要素
+
+tkc:
+  label: "TKCローライブラリー（LEX/DB）"
+  login_url: "https://www.lawlibrary.jp/Law/LoginForm.aspx"
+  check_url: "https://www.lawlibrary.jp/Law/Searcher.aspx"
+  login_url_pattern: "LoginForm\\.aspx"
+  login_form_selector: "input[type='password']"
+  logged_in_selector: "a[href*='ogout'], a[href*='Logout'], input[value*='ログアウト']"
+  search:
+    url: "https://www.lawlibrary.jp/Law/Searcher.aspx"
+    input: "input[type='text']:visible"
+    submit: "input[type='submit']:visible, button[type='submit']:visible"
+    results_wait: "table, .result, .list"
+    row: "table tr:has(a[href*='.aspx'])"
+    row_title: "a"
+    row_link: "a"
+    row_meta: "td"
+    max_rows: 20
+  detail:
+    wait: "body"
+    content: "#main, #content, .content, body"
+
+legal_library:
+  label: "LEGAL LIBRARY"
+  login_url: "https://legal-library.jp/login"
+  check_url: "https://legal-library.jp/"
+  login_url_pattern: "/login"
+  login_form_selector: "input[type='password']"
+  logged_in_selector: "a[href*='logout'], a[href*='mypage'], button:has-text('ログアウト')"
+  search:
+    url: "https://legal-library.jp/search?q={query}"
+    input: "input[type='search'], input[name='q'], input[type='text']:visible"
+    submit: "button[type='submit']:visible"
+    results_wait: "main, .search-result, .results"
+    row: "main a[href*='/book'], .search-result a, .results a, article"
+    row_title: ""
+    row_link: ""
+    row_meta: ""
+    max_rows: 20
+  detail:
+    wait: "main, body"
+    content: ".page-text, .text-layer, .viewer-text, main, body"
