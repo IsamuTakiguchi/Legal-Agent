@@ -1,10 +1,15 @@
-"""selectors.yaml の設定に従ってログイン必須サイトを Playwright で検索する汎用ソース。
+"""selectors.yaml（＋ data/selectors.override.yaml）の設定に従ってログイン必須サイトを Playwright で検索する汎用ソース。
 
 TKC ローライブラリー / LEGAL LIBRARY はどちらもこのクラスで動かす（設定が異なるだけ）。
+- ログイン: 認証情報があれば自動ログイン。無ければ LoginRequired（UI で手動ログインを案内）。
+- セレクタが合わず結果が取れないときは、Claude による自動発見（browser/autoconf.py）を 1 回試して再検索する。
 """
 from __future__ import annotations
 
+import asyncio
+import logging
 import re
+import time
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote, urljoin
@@ -16,14 +21,32 @@ from ..config import Settings
 from ..models import Document, Hit, Kind, LoginRequired
 from .base import slice_text
 
+log = logging.getLogger(__name__)
 _SELECTORS_PATH = Path(__file__).with_name("selectors.yaml")
+AUTOCONF_RETRY_SEC = 3600
 
 
-def load_site_config(site: str, path: Path | None = None) -> dict[str, Any]:
+def _deep_merge(base: dict, over: dict) -> dict:
+    out = dict(base)
+    for k, v in (over or {}).items():
+        if isinstance(v, dict) and isinstance(out.get(k), dict):
+            out[k] = _deep_merge(out[k], v)
+        else:
+            out[k] = v
+    return out
+
+
+def load_site_config(site: str, path: Path | None = None, override_path: Path | None = None) -> dict[str, Any]:
     data = yaml.safe_load((path or _SELECTORS_PATH).read_text(encoding="utf-8"))
     if site not in data:
         raise KeyError(f"selectors.yaml に {site} の設定がありません")
-    return data[site]
+    cfg = data[site]
+    if override_path and Path(override_path).exists():
+        over = yaml.safe_load(Path(override_path).read_text(encoding="utf-8")) or {}
+        if site in over:
+            cfg = _deep_merge(cfg, over[site])
+            cfg["_override"] = True
+    return cfg
 
 
 class BrowserSiteSource:
@@ -34,10 +57,21 @@ class BrowserSiteSource:
         self.kind = kind
         self.settings = settings
         self.browser = browser
-        self.cfg = cfg or load_site_config(name)
+        self._explicit_cfg = cfg
+        self.cfg = cfg or self._load()
         self.label = self.cfg.get("label", name)
         self._hits: dict[str, Hit] = {}
         self._text_cache: dict[str, str] = {}  # セッション内のみ（ディスクには保存しない）
+        self._autoconf_at = 0.0
+        self.autoconf_state: dict[str, Any] = {"running": False, "last_result": None, "log": []}
+        self._autoconf_lock = asyncio.Lock()
+
+    def _load(self) -> dict[str, Any]:
+        return load_site_config(self.name, override_path=self.settings.selectors_override_path)
+
+    def reload(self) -> None:
+        if self._explicit_cfg is None:
+            self.cfg = self._load()
 
     # ---- 共通 ----
     async def _ensure_login(self):
@@ -45,10 +79,10 @@ class BrowserSiteSource:
             pg = await self.browser.page(self.name)
         except BrowserUnavailable as e:
             raise LoginRequired(self.name, str(e)) from e
-        if self.browser.login_state.get(self.name) is not True:
-            ok = await self.browser.check_logged_in(self.name, self.cfg)
-            if not ok:
-                raise LoginRequired(self.name)
+        user, password = self.settings.credentials(self.name)
+        ok = await self.browser.ensure_logged_in(self.name, self.cfg, user, password)
+        if not ok:
+            raise LoginRequired(self.name, self.browser.last_error.get(self.name, ""))
         return pg
 
     def _make_ref(self, item_id: str) -> str:
@@ -56,13 +90,18 @@ class BrowserSiteSource:
 
     @staticmethod
     def _id_from_url(url: str) -> str:
-        # URL の末尾から ID らしき部分を作る（安定性重視でハッシュは使わない）
         tail = re.sub(r"^https?://[^/]+/", "", url)
         return re.sub(r"[^A-Za-z0-9._%=-]+", "_", tail)[:120]
 
+    async def _looks_like_login(self, pg) -> bool:
+        pat = self.cfg.get("login_url_pattern")
+        if pat and re.search(pat, pg.url):
+            return True
+        form = self.cfg.get("login_form_selector")
+        return bool(form) and await pg.locator(form).count() > 0
+
     # ---- 検索 ----
-    async def search(self, query: str, limit: int = 20, **filters: Any) -> list[Hit]:
-        pg = await self._ensure_login()
+    async def _do_search(self, pg, query: str) -> None:
         s = self.cfg["search"]
         url = s["url"]
         if "{query}" in url:
@@ -72,8 +111,8 @@ class BrowserSiteSource:
             await self.browser.dump(self.name, "search-form")
             box = pg.locator(s["input"]).first
             await box.fill(query)
-            submit = pg.locator(s["submit"]).first
-            if await submit.count():
+            submit = pg.locator(s["submit"]).first if s.get("submit") else None
+            if submit is not None and await submit.count():
                 await submit.click()
             else:
                 await box.press("Enter")
@@ -82,10 +121,9 @@ class BrowserSiteSource:
         except Exception:  # noqa: BLE001
             pass
         await self.browser.dump(self.name, "search-results")
-        if await self._looks_like_login(pg):
-            self.browser.login_state[self.name] = False
-            raise LoginRequired(self.name)
 
+    async def _extract_rows(self, pg, limit: int) -> list[Hit]:
+        s = self.cfg["search"]
         rows = pg.locator(s["row"])
         n = min(await rows.count(), int(s.get("max_rows", 20)), limit)
         hits: list[Hit] = []
@@ -95,7 +133,7 @@ class BrowserSiteSource:
             link_el = row.locator(s["row_link"]).first if s.get("row_link") else row
             title = (await title_el.inner_text()).strip() if await title_el.count() else ""
             href = await link_el.get_attribute("href") if await link_el.count() else None
-            if not href:
+            if not href or re.match(r"^(javascript:|#)", href):
                 continue
             href = urljoin(pg.url, href)
             meta_text = ""
@@ -114,12 +152,63 @@ class BrowserSiteSource:
             hits.append(hit)
         return hits
 
-    async def _looks_like_login(self, pg) -> bool:
-        pat = self.cfg.get("login_url_pattern")
-        if pat and re.search(pat, pg.url):
+    async def search(self, query: str, limit: int = 20, **filters: Any) -> list[Hit]:
+        pg = await self._ensure_login()
+        hits: list[Hit] = []
+        error: Exception | None = None
+        try:
+            await self._do_search(pg, query)
+            if await self._looks_like_login(pg):
+                self.browser.login_state[self.name] = False
+                raise LoginRequired(self.name)
+            hits = await self._extract_rows(pg, limit)
+        except LoginRequired:
+            raise
+        except Exception as e:  # noqa: BLE001
+            error = e
+            log.warning("%s: 検索に失敗（%s）", self.name, e)
+        if hits:
+            return hits
+        # セレクタが合っていない可能性 → Claude に画面を解析させて再試行
+        if await self._maybe_autoconfigure(query):
+            pg = await self._ensure_login()
+            await self._do_search(pg, query)
+            hits = await self._extract_rows(pg, limit)
+            if hits:
+                return hits
+        if error:
+            raise RuntimeError(f"{self.label} の検索でエラー: {error}")
+        return []
+
+    async def _maybe_autoconfigure(self, query: str) -> bool:
+        if not self.settings.auto_configure:
+            return False
+        if time.monotonic() - self._autoconf_at < AUTOCONF_RETRY_SEC:
+            return False
+        self._autoconf_at = time.monotonic()
+        try:
+            await self.autoconfigure(query)
             return True
-        form = self.cfg.get("login_form_selector")
-        return bool(form) and await pg.locator(form).count() > 0
+        except Exception as e:  # noqa: BLE001
+            log.warning("%s: セレクタ自動発見に失敗: %s", self.name, e)
+            return False
+
+    async def autoconfigure(self, query: str = "解雇", client=None) -> dict[str, Any]:
+        """Claude で画面構造を解析してセレクタを発見し、override に保存して設定を再読込する。"""
+        from ..browser.autoconf import AutoConfigurator, save_override
+
+        async with self._autoconf_lock:
+            self.autoconf_state.update({"running": True, "last_result": None})
+            ac = AutoConfigurator(self, client=client, model=self.settings.autoconf_model)
+            try:
+                new_cfg = await ac.run(query)
+                save_override(self.settings.selectors_override_path, self.name, new_cfg)
+                self.reload()
+                self.autoconf_state.update({"running": False, "last_result": "ok", "log": ac.log[-12:]})
+                return new_cfg
+            except Exception as e:
+                self.autoconf_state.update({"running": False, "last_result": f"失敗: {e}", "log": ac.log[-12:]})
+                raise
 
     # ---- 本文 ----
     async def fetch(self, item_id: str, **options: Any) -> Document:
@@ -141,12 +230,16 @@ class BrowserSiteSource:
                 self.browser.login_state[self.name] = False
                 raise LoginRequired(self.name)
             text = ""
-            for sel in [x.strip() for x in d["content"].split(",")]:
-                loc = pg.locator(sel).first
-                if await loc.count():
-                    text = (await loc.inner_text()).strip()
-                    if len(text) > 200:
-                        break
+            if not d.get("text_is_image"):
+                for sel in [x.strip() for x in d["content"].split(",") if x.strip()]:
+                    try:
+                        loc = pg.locator(sel).first
+                        if await loc.count():
+                            text = (await loc.inner_text()).strip()
+                            if len(text) > 200:
+                                break
+                    except Exception:  # noqa: BLE001
+                        continue
             if len(text) < 50:
                 text = (
                     "（このページから本文テキストを取得できませんでした。画像表示のビューアの可能性があります。"
@@ -161,8 +254,15 @@ class BrowserSiteSource:
 
     async def status(self) -> dict[str, Any]:
         state = self.browser.login_state.get(self.name)
+        user, password = self.settings.credentials(self.name)
+        detail = "ログイン済み" if state else ("未ログイン" if state is False else "未確認")
+        if state is False and self.browser.last_error.get(self.name):
+            detail = self.browser.last_error[self.name]
         return {
             "available": True,
             "logged_in": state,
-            "detail": "ログイン済み" if state else ("未ログイン" if state is False else "未確認"),
+            "detail": detail,
+            "auto_login": bool(user and password),
+            "configured": bool(self.cfg.get("_override")),
+            "autoconf": self.autoconf_state,
         }

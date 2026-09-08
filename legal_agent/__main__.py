@@ -10,6 +10,9 @@ from .config import get_settings
 
 
 def cmd_serve(args: argparse.Namespace) -> None:
+    import threading
+    import webbrowser
+
     import uvicorn
 
     from .app import create_app
@@ -17,8 +20,17 @@ def cmd_serve(args: argparse.Namespace) -> None:
     s = get_settings()
     host = args.host or s.host
     port = args.port or s.port
-    print(f"Legal-Agent: http://{host}:{port}/  (model={s.model}, effort={s.effort})", file=sys.stderr)
+    url = f"http://{host}:{port}/"
+    print(f"Legal-Agent: {url}  (model={s.model}, effort={s.effort})", file=sys.stderr)
+    if s.auto_open_browser and not getattr(args, "no_open", False):
+        threading.Timer(1.5, lambda: webbrowser.open(url)).start()
     uvicorn.run(create_app(s), host=host, port=port, log_level="info")
+
+
+def cmd_setup(args: argparse.Namespace) -> None:
+    from .setup_wizard import run_setup
+
+    run_setup(non_interactive=args.non_interactive)
 
 
 def cmd_index(args: argparse.Namespace) -> None:
@@ -50,6 +62,24 @@ async def _login(site: str) -> None:
         await reg.aclose()
 
 
+async def _autoconf(site: str, query: str) -> None:
+    from .sources.registry import SourceRegistry
+
+    s = get_settings()
+    reg = SourceRegistry(s)
+    try:
+        src = reg.get(site)
+        print(f"{src.label}: Claude で画面構造を解析しています…", file=sys.stderr)
+        cfg = await src.autoconfigure(query)
+        print("保存しました:", s.selectors_override_path)
+        for line in cfg.get("autoconf_log", []):
+            print(" -", line)
+        for h in await src.search(query, limit=5):
+            print("-", h.to_tool_text())
+    finally:
+        await reg.aclose()
+
+
 async def _search(kind: str, query: str, source: str | None) -> None:
     from .sources.registry import BOOK_SOURCES, CASE_SOURCES, SourceRegistry
 
@@ -71,12 +101,20 @@ async def _search(kind: str, query: str, source: str | None) -> None:
 
 def main(argv: list[str] | None = None) -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
-    ap = argparse.ArgumentParser(prog="legal-agent")
-    sub = ap.add_subparsers(dest="cmd", required=True)
-    p = sub.add_parser("serve", help="Web UI を起動")
+    ap = argparse.ArgumentParser(prog="legal-agent", description="引数なしで起動すると、初回は setup、以後は serve を実行します。")
+    sub = ap.add_subparsers(dest="cmd")
+    p = sub.add_parser("serve", help="Web UI を起動（ブラウザが自動で開く）")
     p.add_argument("--host")
     p.add_argument("--port", type=int)
+    p.add_argument("--no-open", action="store_true")
     p.set_defaults(fn=cmd_serve)
+    p = sub.add_parser("setup", help="初回セットアップ（.env 生成・Chromium 導入・索引）")
+    p.add_argument("--non-interactive", action="store_true")
+    p.set_defaults(fn=cmd_setup)
+    p = sub.add_parser("autoconf", help="Claude でサイトのセレクタを自動発見して保存")
+    p.add_argument("site", choices=["tkc", "legal_library"])
+    p.add_argument("--query", default="解雇")
+    p.set_defaults(fn=lambda a: asyncio.run(_autoconf(a.site, a.query)))
     p = sub.add_parser("index", help="書籍 PDF を索引化")
     p.add_argument("paths", nargs="*")
     p.add_argument("--rebuild", action="store_true")
@@ -93,6 +131,13 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--source", choices=["local", "legal_library"])
     p.set_defaults(fn=lambda a: asyncio.run(_search("book", a.query, a.source)))
     args = ap.parse_args(argv)
+    if args.cmd is None:
+        from pathlib import Path
+
+        if not Path(".env").exists():
+            cmd_setup(argparse.Namespace(non_interactive=False))
+        cmd_serve(argparse.Namespace(host=None, port=None, no_open=False))
+        return
     args.fn(args)
 
 

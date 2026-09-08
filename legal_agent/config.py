@@ -25,8 +25,24 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 8765
 
-    headless: bool = False
+    headless: bool = True
     debug_dump: bool = False
+    # 通常は空（playwright install chromium のものを使う）。別の Chromium を使う場合のみ指定
+    chromium_path: str = ""
+
+    # 自動ログイン用の認証情報（未設定なら手動ログイン）
+    tkc_user: str = ""
+    tkc_password: str = ""
+    legal_library_user: str = ""
+    legal_library_password: str = ""
+
+    # 起動時の自動処理
+    auto_index: bool = True
+    auto_login: bool = True
+    auto_open_browser: bool = True
+    # Claude によるセレクタ自動発見（ログイン後の画面構造を解析して data/selectors.override.yaml に保存）
+    auto_configure: bool = True
+    autoconf_model: str = "claude-opus-5"
 
     max_searches_per_source: int = 3
     max_fetches_per_run: int = 6
@@ -66,6 +82,13 @@ class Settings(BaseSettings):
     @property
     def browser_profile_dir(self) -> Path:
         return self.data_dir / "browser_profile"
+
+    @property
+    def selectors_override_path(self) -> Path:
+        return self.data_dir / "selectors.override.yaml"
+
+    def credentials(self, site: str) -> tuple[str, str]:
+        return getattr(self, f"{site}_user", ""), getattr(self, f"{site}_password", "")
 
     def ensure_dirs(self) -> None:
         for p in (self.data_dir, self.cache_dir, self.sessions_dir, self.memos_dir, self.browser_profile_dir):

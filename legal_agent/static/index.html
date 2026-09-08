@@ -148,21 +148,39 @@ async function loadStatus() {
     const checked = saved === null ? true : saved === "1";
     const dot = s.requires_login ? (s.logged_in === true ? "ok" : (s.logged_in === false ? "ng" : "")) : (s.available ? "ok" : "ng");
     const el = document.createElement("label"); el.className = "src";
-    el.innerHTML = `<input type="checkbox" data-src="${name}" ${checked ? "checked" : ""}><span class="dot ${dot}"></span>${esc(s.label)}<span style="color:var(--muted)">${esc(s.detail || "")}</span>` +
-      (s.requires_login ? ` <button type="button" data-login="${name}">ログイン</button>` : "");
+    let extra = "";
+    if (s.requires_login) {
+      const loginLabel = s.logged_in === true ? "再ログイン" : (s.auto_login ? "自動ログイン" : "ログイン");
+      extra = ` <button type="button" data-login="${name}" title="${s.auto_login ? "保存された認証情報でログイン" : "ブラウザを開いて手動ログイン"}">${loginLabel}</button>`;
+      if (s.auto_login) extra += ` <button type="button" data-login-manual="${name}" title="ブラウザを開いて手動でログイン">手動</button>`;
+      if (st.auto_configure) extra += ` <button type="button" data-autoconf="${name}" title="Claude が画面構造を解析して検索方法を自動設定">${s.configured ? "再設定" : "自動設定"}</button>`;
+    }
+    const detail = s.requires_login && s.configured ? `${s.detail || ""}・設定済` : (s.detail || "");
+    el.innerHTML = `<input type="checkbox" data-src="${name}" ${checked ? "checked" : ""}><span class="dot ${dot}"></span>${esc(s.label)}<span style="color:var(--muted)">${esc(detail)}</span>` + extra;
     box.appendChild(el);
   }
   box.querySelectorAll("input[data-src]").forEach(i => i.addEventListener("change", e => localStorage.setItem("src:" + e.target.dataset.src, e.target.checked ? "1" : "0")));
-  box.querySelectorAll("button[data-login]").forEach(b => b.addEventListener("click", () => startLogin(b.dataset.login)));
-  $("#indexInfo").textContent = `${st.index.documents} 冊 / ${st.index.pages} ページ` + (st.pdf_dirs.length ? "" : "（PDF_DIRS 未設定）");
+  box.querySelectorAll("button[data-login]").forEach(b => b.addEventListener("click", () => startLogin(b.dataset.login, false)));
+  box.querySelectorAll("button[data-login-manual]").forEach(b => b.addEventListener("click", () => startLogin(b.dataset.loginManual, true)));
+  box.querySelectorAll("button[data-autoconf]").forEach(b => b.addEventListener("click", () => startAutoconf(b.dataset.autoconf)));
+  $("#indexInfo").textContent = `${st.index.documents} 冊 / ${st.index.pages} ページ` + (st.indexing ? "（更新中…）" : "") + (st.pdf_dirs.length ? "" : "（PDF_DIRS 未設定）");
+  if (st.indexing) setTimeout(loadStatus, 5000);
 }
-async function startLogin(site) {
-  const r = await (await fetch(`/api/login/${site}`, { method: "POST" })).json();
+async function startLogin(site, manual) {
+  const r = await (await fetch(`/api/login/${site}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ manual }) })).json();
   setStatus(r.message);
   const timer = setInterval(async () => {
     const s = await (await fetch(`/api/login/${site}`)).json();
-    if (!s.waiting) { clearInterval(timer); setStatus(s.logged_in ? `${site}: ログイン済み` : `${site}: ログインを確認できませんでした`); loadStatus(); }
-  }, 3000);
+    if (!s.waiting) { clearInterval(timer); setStatus(s.logged_in ? `${labelOf(site)}: ログイン済み` : `${labelOf(site)}: ログインできませんでした${s.error ? "（" + s.error + "）" : ""}。「手動」でブラウザからログインできます。`); loadStatus(); }
+  }, 2000);
+}
+async function startAutoconf(site) {
+  const r = await (await fetch(`/api/autoconf/${site}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: "解雇" }) })).json();
+  setStatus(r.message);
+  const timer = setInterval(async () => {
+    const s = await (await fetch(`/api/autoconf/${site}`)).json();
+    if (!s.waiting && !s.running) { clearInterval(timer); setStatus(`${labelOf(site)} 自動設定: ${s.last_result || "完了"}` + (s.log && s.log.length ? " — " + s.log[s.log.length - 1] : "")); loadStatus(); }
+  }, 4000);
 }
 function setStatus(t) { $("#statusLine").textContent = t; }
 function enabledSources() { return [...document.querySelectorAll("input[data-src]")].filter(i => i.checked).map(i => i.dataset.src); }

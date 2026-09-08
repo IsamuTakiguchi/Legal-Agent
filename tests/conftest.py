@@ -15,7 +15,10 @@ def settings(tmp_path, monkeypatch):
 
     monkeypatch.setenv("LEGAL_AGENT_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.delenv("LEGAL_AGENT_PDF_DIRS", raising=False)
-    s = Settings(_env_file=None, data_dir=tmp_path / "data", headless=True, min_interval_sec=0)
+    chromium = os.environ.get("LEGAL_AGENT_CHROMIUM_PATH", "")
+    if not chromium and Path("/opt/pw-browsers/chromium").exists():
+        chromium = "/opt/pw-browsers/chromium"
+    s = Settings(_env_file=None, data_dir=tmp_path / "data", headless=True, min_interval_sec=0, chromium_path=chromium)
     s.ensure_dirs()
     return s
 

@@ -30,7 +30,7 @@ build-backend = "setuptools.build_meta"
 include = ["legal_agent*"]
 
 [tool.setuptools.package-data]
-legal_agent = ["static/*", "sources/*.yaml"]
+legal_agent = ["static/*", "sources/*.yaml", "browser/*.js"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

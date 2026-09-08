@@ -1,34 +1,40 @@
 # TKC ローライブラリー / LEGAL LIBRARY のブラウザ操作設定。
 #
-# 両サイトは API を提供しておらず、ログイン後の画面構造はこのリポジトリの開発環境からは確認できていない。
-# ここに書いたセレクタは「一般的な構造の推定」であり、初回はご自身の PC で
-#   LEGAL_AGENT_DEBUG_DUMP=1 python -m legal_agent search-cases "解雇" --source tkc
-# などを実行し、data/debug/ に保存される HTML / スクリーンショットを見て調整すること。
+# login: 節は公開のログインページから確認した実際のセレクタ（自動ログインに使う）。
+# search: / detail: 節はログイン後の画面が開発環境から見えないため推定値。
+# 実行時にうまく動かない場合は Claude が画面を解析してセレクタを自動発見し、
+# data/selectors.override.yaml に保存する（この設定より優先される）。
+# 手で直したい場合も data/selectors.override.yaml に同じ構造で書けばよい。
 #
-# 各キーの意味:
-#   login_url            : 手動ログイン用に開く URL
-#   check_url            : ログイン状態確認のため開く URL（未ログインならログイン画面へ飛ばされる想定）
-#   login_url_pattern    : 現在 URL がこれに一致すれば「未ログイン」
-#   login_form_selector  : これが存在すれば「未ログイン」
-#   logged_in_selector   : これが存在すれば「ログイン済み」
-#   search.url           : 検索画面 URL。{query} を含めれば URL 直接指定で検索（フォーム操作を省略）
-#   search.input/submit  : 検索語入力欄と検索ボタン
-#   search.results_wait  : 結果が描画されたと見なす要素
-#   search.row           : 結果 1 件の要素。row_title/row_link/row_meta はその内側のセレクタ
-#   detail.content       : 本文を innerText で取得する要素
-#   detail.wait          : 本文ページで待つ要素
+# キーの意味:
+#   login_url / check_url : ログイン画面 / ログイン状態確認用に開く URL
+#   login_url_pattern     : 現在 URL がこれに一致すれば「未ログイン」
+#   login_form_selector   : これが存在すれば「未ログイン」
+#   logged_in_selector    : これが存在すれば「ログイン済み」
+#   login.user/password/remember/submit : 自動ログイン用フォーム要素
+#   search.url            : 検索画面 URL。{query} を含めれば URL 直接指定で検索
+#   search.input/submit   : 検索語入力欄と検索ボタン
+#   search.results_wait   : 結果が描画されたと見なす要素
+#   search.row            : 結果 1 件の要素。row_title/row_link/row_meta はその内側
+#   detail.content        : 本文を innerText で取得する要素
 
 tkc:
   label: "TKCローライブラリー（LEX/DB）"
+  home_url: "https://www.lawlibrary.jp/"
   login_url: "https://www.lawlibrary.jp/Law/LoginForm.aspx"
   check_url: "https://www.lawlibrary.jp/Law/Searcher.aspx"
   login_url_pattern: "LoginForm\\.aspx"
-  login_form_selector: "input[type='password']"
-  logged_in_selector: "a[href*='ogout'], a[href*='Logout'], input[value*='ログアウト']"
+  login_form_selector: "#LoginForm input#Password"
+  logged_in_selector: "a[href*='ogout'], a[href*='Logout'], input[value*='ログアウト'], a:has-text('ログアウト')"
+  login:
+    user: "#LoginAccount"
+    password: "#Password"
+    remember: "#SaveIDCheckBox"
+    submit: "#ImageButton1"
   search:
     url: "https://www.lawlibrary.jp/Law/Searcher.aspx"
     input: "input[type='text']:visible"
-    submit: "input[type='submit']:visible, button[type='submit']:visible"
+    submit: "input[type='submit']:visible, input[type='image']:visible, button[type='submit']:visible"
     results_wait: "table, .result, .list"
     row: "table tr:has(a[href*='.aspx'])"
     row_title: "a"
@@ -41,21 +47,27 @@ tkc:
 
 legal_library:
   label: "LEGAL LIBRARY"
+  home_url: "https://legal-library.jp/"
   login_url: "https://legal-library.jp/login"
-  check_url: "https://legal-library.jp/"
+  check_url: "https://legal-library.jp/search"
   login_url_pattern: "/login"
-  login_form_selector: "input[type='password']"
-  logged_in_selector: "a[href*='logout'], a[href*='mypage'], button:has-text('ログアウト')"
+  login_form_selector: "input#password"
+  logged_in_selector: "a[href*='logout'], a[href*='mypage'], button:has-text('ログアウト'), a:has-text('ログアウト')"
+  login:
+    user: "#email"
+    password: "#password"
+    remember: "#keep"
+    submit: "#login-btn"
   search:
-    url: "https://legal-library.jp/search?q={query}"
-    input: "input[type='search'], input[name='q'], input[type='text']:visible"
-    submit: "button[type='submit']:visible"
-    results_wait: "main, .search-result, .results"
-    row: "main a[href*='/book'], .search-result a, .results a, article"
+    url: "https://legal-library.jp/search?keyword={query}"
+    input: "input[type='search'], input[name='keyword'], input[name='q'], input[type='text']:visible"
+    submit: "button[type='submit']:visible, .Btn:has-text('検索')"
+    results_wait: "main, .search-result, .results, .SearchResult"
+    row: "main a[href*='/book'], .search-result a, .results a, .SearchResult a, article"
     row_title: ""
     row_link: ""
     row_meta: ""
     max_rows: 20
   detail:
     wait: "main, body"
-    content: ".page-text, .text-layer, .viewer-text, main, body"
+    content: ".page-text, .text-layer, .viewer-text, .Viewer, main, body"
