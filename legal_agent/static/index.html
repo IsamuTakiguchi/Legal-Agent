@@ -64,6 +64,20 @@
   .err { color: var(--warn); }
   .hint { color: var(--muted); font-size: 12px; max-width: 860px; margin: 0 auto 10px; }
   .status-line { font-size: 11px; color: var(--muted); margin-top: 6px; max-width: 860px; margin-left: auto; margin-right: auto; }
+  .setup { max-width: 720px; margin: 24px auto; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 24px; }
+  .setup h2 { font-size: 16px; margin: 0 0 14px; }
+  .setup .f { display: block; margin-bottom: 16px; }
+  .setup .f > span { display: block; font-weight: 600; margin-bottom: 6px; }
+  .setup input[type=password], .setup input[type=text] { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; }
+  .setup small { display: block; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+  .setup small a { color: var(--accent); }
+  .folders { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; margin-bottom: 8px; max-height: 220px; overflow: auto; }
+  .folders label { display: flex; gap: 8px; align-items: center; padding: 4px 0; cursor: pointer; }
+  .folders .n { color: var(--muted); font-size: 12px; margin-left: auto; white-space: nowrap; }
+  .setup button { padding: 9px 18px; border-radius: 8px; border: none; background: var(--accent); color: var(--accent-ink); font-weight: 600; cursor: pointer; }
+  .setup button:disabled { opacity: .5; }
+  .chat.setup-mode .compose, .chat.setup-mode .log { display: none; }
+  .chat.setup-mode { grid-template-rows: 1fr; overflow: auto; }
   @media (max-width: 1000px) { main { grid-template-columns: 1fr; } aside, .cites { display: none; } }
 </style>
 </head>
@@ -83,6 +97,26 @@
     <button id="reindex" style="margin-top:6px;font-size:12px">索引を更新</button>
   </aside>
   <section class="chat">
+    <div class="setup" id="setup" hidden>
+      <h2>はじめに設定（1 回だけ）</h2>
+      <form id="setupForm">
+        <label class="f">
+          <span>Anthropic API キー</span>
+          <input id="setupKey" type="password" autocomplete="off" placeholder="sk-ant-…">
+          <small><a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Anthropic コンソール</a>で「Create Key」を押して発行し、ここに貼り付けてください。キーはこの PC の .env にのみ保存されます。</small>
+        </label>
+        <div class="f">
+          <span>書籍 PDF のフォルダ</span>
+          <div id="setupFolders" class="folders"><div class="hint">OneDrive の同期フォルダを探しています…</div></div>
+          <input id="setupManual" type="text" placeholder="一覧に無い場合はフォルダのパスを貼り付け（任意）">
+          <small>チェックしたフォルダ内の PDF を全文索引します（クラウドのみの PDF は順次ダウンロードされます）。後から「索引を更新」で再スキャンできます。</small>
+        </div>
+        <div class="f">
+          <button id="setupSave" type="submit">保存して開始</button>
+          <span id="setupMsg" class="hint"></span>
+        </div>
+      </form>
+    </div>
     <div class="log" id="log">
       <div class="hint">質問例: 「整理解雇の四要件について、近年の裁判例と手持ちの書籍の解説を踏まえて整理して」。回答中の [番号] は右の出典パネルに対応します。</div>
     </div>
@@ -137,8 +171,44 @@ function md(text) {
 }
 
 // --- 状態表示 ---
+// --- 初回セットアップ ---
+let setupShown = false;
+async function showSetup() {
+  $("#setup").hidden = false; document.querySelector(".chat").classList.add("setup-mode");
+  if (setupShown) return; setupShown = true;
+  try {
+    const f = await (await fetch("/api/setup/folders")).json();
+    const box = $("#setupFolders"); box.innerHTML = "";
+    if (!f.folders.length) box.innerHTML = `<div class="hint">OneDrive の同期フォルダに PDF が見つかりませんでした${f.onedrive_roots.length ? "" : "（OneDrive が同期されていない可能性があります）"}。下の欄にフォルダのパスを貼り付けてください。</div>`;
+    f.folders.forEach((d, i) => {
+      const l = document.createElement("label");
+      const rel = d.path.startsWith(d.root) ? d.path.slice(d.root.length).replace(/^[\\/]/, "") : d.path;
+      l.innerHTML = `<input type="checkbox" value="${esc(d.path)}" ${i === 0 || f.current.includes(d.path) ? "checked" : ""}><span title="${esc(d.path)}">${esc(rel || d.path)}</span><span class="n">PDF ${d.pdfs} 件</span>`;
+      box.appendChild(l);
+    });
+  } catch (e) { $("#setupFolders").innerHTML = `<div class="err">フォルダ一覧を取得できませんでした: ${esc(e.message)}</div>`; }
+}
+function hideSetup() { $("#setup").hidden = true; document.querySelector(".chat").classList.remove("setup-mode"); }
+$("#setupForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const btn = $("#setupSave"); btn.disabled = true; $("#setupMsg").textContent = "API キーを確認しています…";
+  const dirs = [...document.querySelectorAll("#setupFolders input:checked")].map(i => i.value);
+  try {
+    const r = await fetch("/api/setup", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_key: $("#setupKey").value, pdf_dirs: dirs, manual_path: $("#setupManual").value }) });
+    const j = await r.json();
+    if (!r.ok) { $("#setupMsg").textContent = j.detail || "設定に失敗しました"; $("#setupMsg").className = "err"; return; }
+    $("#setupMsg").className = "hint";
+    $("#setupMsg").textContent = "保存しました。" + (dirs.length || j.pdf_dirs.length ? "書籍 PDF の索引を作成しています（左の冊数が増えていきます）。" : "");
+    if (j.missing && j.missing.length) $("#setupMsg").textContent += ` 見つからないフォルダ: ${j.missing.join(", ")}`;
+    setTimeout(() => { hideSetup(); loadStatus(); }, 1200);
+  } catch (err) { $("#setupMsg").textContent = "通信エラー: " + err.message; $("#setupMsg").className = "err"; }
+  finally { btn.disabled = false; }
+};
+
 async function loadStatus() {
   const st = await (await fetch("/api/status")).json();
+  if (st.needs_setup) showSetup(); else hideSetup();
   $("#model").textContent = `${st.model} / effort=${st.effort}`;
   state.sources = st.sources;
   const box = $("#sources"); box.innerHTML = "";

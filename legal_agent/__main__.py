@@ -101,14 +101,14 @@ async def _search(kind: str, query: str, source: str | None) -> None:
 
 def main(argv: list[str] | None = None) -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
-    ap = argparse.ArgumentParser(prog="legal-agent", description="引数なしで起動すると、初回は setup、以後は serve を実行します。")
+    ap = argparse.ArgumentParser(prog="legal-agent", description="引数なしで起動すると Web UI を開きます（初回はブラウザ上でセットアップ）。")
     sub = ap.add_subparsers(dest="cmd")
     p = sub.add_parser("serve", help="Web UI を起動（ブラウザが自動で開く）")
     p.add_argument("--host")
     p.add_argument("--port", type=int)
     p.add_argument("--no-open", action="store_true")
     p.set_defaults(fn=cmd_serve)
-    p = sub.add_parser("setup", help="初回セットアップ（.env 生成・Chromium 導入・索引）")
+    p = sub.add_parser("setup", help="ターミナル版セットアップ（通常はブラウザ上で行うので不要）")
     p.add_argument("--non-interactive", action="store_true")
     p.set_defaults(fn=cmd_setup)
     p = sub.add_parser("autoconf", help="Claude でサイトのセレクタを自動発見して保存")
@@ -132,10 +132,7 @@ def main(argv: list[str] | None = None) -> None:
     p.set_defaults(fn=lambda a: asyncio.run(_search("book", a.query, a.source)))
     args = ap.parse_args(argv)
     if args.cmd is None:
-        from pathlib import Path
-
-        if not Path(".env").exists():
-            cmd_setup(argparse.Namespace(non_interactive=False))
+        # 引数なし: そのまま起動。API キー未設定ならブラウザ上にセットアップ画面が出る
         cmd_serve(argparse.Namespace(host=None, port=None, no_open=False))
         return
     args.fn(args)

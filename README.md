@@ -12,23 +12,30 @@ LegalBrain エージェント / Legalscape のような使い勝手を、**自�
 
 回答は Claude（既定 `claude-opus-5`）がツールを使って調査し、本文中の `[1]` `[2]` が右側の出典パネル（判例の裁判所・日付・事件番号、書籍名・ページ、原典リンク）に対応します。
 
-## 手動作業は 2 回だけ
+## 導入は 3 手順（Windows）
 
-```bash
-pip install -e .            # ① インストール
-python -m legal_agent       # ② 起動（初回は対話セットアップ → そのまま起動。ブラウザが自動で開く）
-```
+1. このリポジトリを ZIP でダウンロードして展開する（または `git clone`）。
+2. 展開したフォルダの **`install.bat` をダブルクリック**する。Python が無ければ自動でインストールし、アプリを導入し、デスクトップに「Legal-Agent」ショートカットを作って起動します（数分）。
+3. 自動で開いたブラウザの画面で、**Anthropic API キーを貼り付け、書籍 PDF のフォルダにチェック**を入れて「保存して開始」を押す。
 
-初回セットアップで聞かれるのは、Anthropic API キーと書籍 PDF のフォルダだけです。
-書籍 PDF のフォルダは、PC に同期されている OneDrive の中から PDF のあるフォルダを一覧表示するので、番号を選ぶだけです。
-あとは自動で行われます。
+以後は、デスクトップの「Legal-Agent」ショートカットをダブルクリックするだけです（ブラウザが自動で開きます。既に起動していればブラウザだけ開きます）。
 
-- Chromium の導入、書籍 PDF の索引化（起動時と 1 時間ごとに差分更新）
+- API キーは [Anthropic コンソール](https://console.anthropic.com/settings/keys) で「Create Key」を押して発行します（これだけは自動化できません）。キーはこの PC の `.env` にのみ保存されます。
+- 書籍 PDF のフォルダは、PC に同期されている OneDrive の中から PDF のあるフォルダを件数付きで一覧するので、チェックするだけです。
+- 索引化は保存直後にバックグラウンドで始まり、以後は起動時と 1 時間ごとに差分更新されます。
+- macOS / Linux は `bash install.sh`（以後は `./start.sh`）。ターミナルで設定したい場合は `python -m legal_agent setup`。
+- Windows のログオン時に自動起動したい場合: `Win + R` → `shell:startup` で開くフォルダに、デスクトップの「Legal-Agent」ショートカットをコピーします。
+
+### うまく動かないとき
+
+- `install.bat` で Python のインストールに失敗する（winget が無い等）: 開いた python.org のページからインストーラーを実行し、「Add python.exe to PATH」にチェックを入れてから `install.bat` をもう一度ダブルクリック。
+- 「ポートが使用中」: 既に起動しています。ブラウザで http://127.0.0.1:8765/ を開くか、`.env` に `LEGAL_AGENT_PORT=8766` を追加。
+- 画面が開かない: `start.bat` の黒いウィンドウを閉じていないか確認し、http://127.0.0.1:8765/ を直接開く。
 
 ### OneDrive 上の書籍 PDF について
 
 - 前提: アプリを動かす PC に OneDrive 同期クライアントが入っていること（Windows なら標準。`C:\Users\<名前>\OneDrive` などに同期フォルダがある状態）。Microsoft Graph API や Azure のアプリ登録は使いません。
-- セットアップは環境変数 `OneDriveConsumer` / `OneDrive` などから同期フォルダを検出し、PDF を含むフォルダを件数付きで一覧します。別の場所ならパスを直接入力できます。
+- セットアップ画面は環境変数 `OneDriveConsumer` / `OneDrive` などから同期フォルダを検出し、PDF を含むフォルダを件数付きで一覧します。別の場所ならパスを貼り付けられます。
 - Windows の「ファイル オンデマンド」でクラウドのみになっている PDF は、索引時に順次ダウンロードされます（冊数が多いと初回は時間がかかります）。確実にしたい場合は、エクスプローラーでフォルダを右クリック →「このデバイス上で常に保持する」を選んでください。
 - ダウンロードできなかったファイル（オフライン、同期中のロックなど）は失敗として記録され、次回の自動スキャン（1 時間ごと、または画面の「索引を更新」）で再試行されます。
 - 画面左の「書籍索引」に、フォルダが見つからない場合（OneDrive 未サインインなど）や未ダウンロードの冊数が表示されます。
@@ -42,7 +49,7 @@ python -m legal_agent       # ② 起動（初回は対話セットアップ →
 CLI からも操作できます。
 
 ```bash
-python -m legal_agent setup                      # 設定をやり直す
+python -m legal_agent setup                      # ターミナルで設定をやり直す（通常は画面から）
 python -m legal_agent search-cases "整理解雇 四要件" --source courts
 python -m legal_agent search-books "解雇権濫用" --source local
 python -m legal_agent index --rebuild            # 索引を作り直す
@@ -90,7 +97,8 @@ LEGAL_AGENT_DEBUG_DUMP=1 python -m legal_agent autoconf tkc
 ```
 legal_agent/
   app.py            FastAPI（/api/chat は SSE でストリーミング。起動時に索引更新・自動ログイン）
-  setup_wizard.py   初回セットアップ
+  setup_wizard.py   セットアップ処理（ブラウザ版 /api/setup とターミナル版で共用）
+install.bat / start.bat   Windows 用の導入・起動（install.sh / start.sh は macOS・Linux 用）
   static/index.html チャット UI + 出典パネル
   agent/            システムプロンプト、ツール、Claude tool_runner、引用解決、セッション保存
   sources/          courts.go.jp / TKC / LEGAL LIBRARY / ローカル PDF（selectors.yaml でサイト設定）

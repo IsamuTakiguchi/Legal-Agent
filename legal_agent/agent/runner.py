@@ -51,7 +51,17 @@ class AgentRunner:
         self.settings = settings
         self.registry = registry
         self.store = store
-        self.client = client or anthropic.AsyncAnthropic()
+        self._client = client  # 遅延生成: セットアップ完了後に API キーが入ってから作れるようにする
+
+    @property
+    def client(self) -> anthropic.AsyncAnthropic:
+        if self._client is None:
+            self.settings.export_api_key()
+            self._client = anthropic.AsyncAnthropic()
+        return self._client
+
+    def reset_client(self) -> None:
+        self._client = None
 
     def _request_params(self) -> dict[str, Any]:
         p: dict[str, Any] = {

@@ -1,6 +1,7 @@
 """アプリ設定。`.env` と環境変数（接頭辞 LEGAL_AGENT_）から読み込む。"""
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
@@ -13,6 +14,9 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="LEGAL_AGENT_", env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
+
+    # Anthropic API キー。接頭辞なしの ANTHROPIC_API_KEY を環境変数と .env の両方から読む
+    anthropic_api_key: str = Field(default="", validation_alias="ANTHROPIC_API_KEY")
 
     model: str = "claude-opus-5"
     effort: str = "high"
@@ -96,8 +100,23 @@ class Settings(BaseSettings):
     def selectors_override_path(self) -> Path:
         return self.data_dir / "selectors.override.yaml"
 
+    # セットアップ画面が書き込む .env の場所（カレントディレクトリ。start.bat はリポジトリ直下で起動する）
+    env_path: Path = Path(".env")
+
     def credentials(self, site: str) -> tuple[str, str]:
         return getattr(self, f"{site}_user", ""), getattr(self, f"{site}_password", "")
+
+    def export_api_key(self) -> None:
+        """.env から読んだ API キーを SDK が読む環境変数へ反映する。"""
+        if self.anthropic_api_key and not os.environ.get("ANTHROPIC_API_KEY"):
+            os.environ["ANTHROPIC_API_KEY"] = self.anthropic_api_key
+
+    @property
+    def needs_setup(self) -> bool:
+        """API キーがどこにも無ければ、ブラウザ上のセットアップ画面を出す。"""
+        if self.anthropic_api_key or os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"):
+            return False
+        return not sdk_has_credentials()
 
     def ensure_dirs(self) -> None:
         for p in (self.data_dir, self.cache_dir, self.sessions_dir, self.memos_dir, self.browser_profile_dir):
@@ -106,8 +125,20 @@ class Settings(BaseSettings):
             self.debug_dir.mkdir(parents=True, exist_ok=True)
 
 
+def sdk_has_credentials() -> bool:
+    """`ant auth login` のプロファイル等、SDK 側で資格情報を解決できるか。"""
+    try:
+        import anthropic
+
+        c = anthropic.Anthropic()
+        return bool(getattr(c, "api_key", None) or getattr(c, "auth_token", None))
+    except Exception:  # noqa: BLE001
+        return False
+
+
 @lru_cache
 def get_settings() -> Settings:
     s = Settings()
     s.ensure_dirs()
+    s.export_api_key()
     return s

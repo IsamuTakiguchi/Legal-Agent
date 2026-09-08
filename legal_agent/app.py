@@ -16,7 +16,9 @@ from .agent.runner import AgentRunner
 from .agent.sessions import SessionStore
 from .config import Settings, get_settings
 from .index.indexer import index_dirs
-from .onedrive import describe_dir
+from . import onedrive
+from .onedrive import describe_dir, list_pdf_folders, strip_quotes
+from .setup_wizard import apply_setup, login_sites_enabled, validate_api_key
 from .sources.registry import SourceRegistry
 
 log = logging.getLogger(__name__)
@@ -35,6 +37,12 @@ class AutoconfRequest(BaseModel):
     query: str = "解雇"
 
 
+class SetupRequest(BaseModel):
+    api_key: str | None = None
+    pdf_dirs: list[str] = Field(default_factory=list)
+    manual_path: str | None = None
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
     registry = SourceRegistry(settings)
@@ -45,6 +53,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     chat_lock = asyncio.Lock()
     bg: dict[str, Any] = {"indexing": False, "index_result": None, "startup_login": {}}
     bg_tasks: list[asyncio.Task] = []
+    index_wake = asyncio.Event()  # セットアップ完了時などに即時再スキャンさせる
 
     async def auto_index_loop() -> None:
         while True:
@@ -56,7 +65,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     bg["index_result"] = {"error": str(e)}
                 finally:
                     bg["indexing"] = False
-            await asyncio.sleep(INDEX_RESCAN_SEC)
+            index_wake.clear()
+            try:
+                await asyncio.wait_for(index_wake.wait(), timeout=INDEX_RESCAN_SEC)
+            except asyncio.TimeoutError:
+                pass
 
     async def startup_login() -> None:
         for site in registry.login_sites():
@@ -96,6 +109,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/status")
     async def status() -> dict[str, Any]:
         return {
+            "needs_setup": settings.needs_setup,
             "model": settings.model,
             "effort": settings.effort,
             "sources": await registry.statuses(),
@@ -111,8 +125,45 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             },
         }
 
+    # ---- ブラウザ上のセットアップ ----
+    @app.get("/api/setup/folders")
+    async def setup_folders() -> dict[str, Any]:
+        def scan() -> dict[str, Any]:
+            roots = onedrive.detect_onedrive_roots()  # モジュール経由で参照（テストで差し替え可能）
+            folders = []
+            for r in roots:
+                for p, n in list_pdf_folders(r):
+                    folders.append({"path": str(p), "pdfs": n, "root": str(r)})
+            return {"onedrive_roots": [str(r) for r in roots], "folders": folders, "current": [str(p) for p in settings.pdf_dirs]}
+
+        return await asyncio.to_thread(scan)
+
+    @app.post("/api/setup")
+    async def setup(req: SetupRequest) -> dict[str, Any]:
+        api_key = (req.api_key or "").strip()
+        if api_key:
+            err = await validate_api_key(api_key)
+            if err:
+                raise HTTPException(400, err)
+        elif settings.needs_setup:
+            raise HTTPException(400, "API キーを入力してください")
+        dirs = [strip_quotes(p) for p in (req.pdf_dirs or []) if strip_quotes(p)]
+        if req.manual_path and strip_quotes(req.manual_path):
+            dirs.append(strip_quotes(req.manual_path))
+        env = await asyncio.to_thread(apply_setup, api_key or None, dirs, settings.env_path)
+        if api_key:
+            settings.anthropic_api_key = api_key
+            runner.reset_client()
+        settings.pdf_dirs = [Path(p).expanduser() for p in dirs]
+        settings.export_api_key()
+        index_wake.set()
+        missing = [p for p in dirs if not Path(p).expanduser().is_dir()]
+        return {"ok": True, "pdf_dirs": dirs, "missing": missing, "needs_setup": settings.needs_setup, "env_path": str(settings.env_path), "chromium": login_sites_enabled(env)}
+
     @app.post("/api/chat")
     async def chat(req: ChatRequest) -> StreamingResponse:
+        if settings.needs_setup:
+            raise HTTPException(400, "初回セットアップ（API キーの設定）が必要です")
         session = store.get_or_create(req.session_id)
         enabled = {s for s in req.sources if s in registry.names()}
 
