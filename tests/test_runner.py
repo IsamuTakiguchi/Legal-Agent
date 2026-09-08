@@ -98,7 +98,7 @@ async def test_runner_end_to_end(settings, tmp_path):
     assert done["type"] == "done"
     assert done["text"] == "解雇は無効[1]。"
     assert done["citations"][0]["ref"] == "courts:9" and done["citations"][0]["number"] == 1
-    assert done["usage"] == {"input": 10, "output": 5}
+    assert done["usage"]["input"] == 10 and done["usage"]["output"] == 5 and done["usage"]["cost_usd"] > 0
     # 履歴: user / assistant(tool_use) / user(tool_result) / assistant(text)
     roles = [m["role"] for m in session.messages]
     assert roles == ["user", "assistant", "user", "assistant"]
@@ -114,7 +114,22 @@ async def test_runner_end_to_end(settings, tmp_path):
     p = calls[0]
     assert p["model"] == "claude-opus-5" and p["stream"] is True and p["thinking"]["type"] == "adaptive"
     assert p["fallbacks"] == "default" and p["output_config"] == {"effort": "high"}
+    assert p["cache_control"] == {"type": "ephemeral"} and p["max_iterations"] == 24
     assert p["messages"][0]["content"].startswith("解雇の有効性は？")
+    # 使用量は全ターン合算（1 ターン目 usage なし、2 ターン目 10/5）
+    assert done["usage"]["input"] == 10 and done["usage"]["output"] == 5 and done["usage"]["turns"] == 1
+    assert done["session_usage"]["output"] == 5 and session.usage["output"] == 5
+    assert "usage" in types
+    # 2 問目: 前の質問のツール結果は圧縮されてから送られ、セッションに残る履歴も圧縮済み
+    client2, calls2 = make_client()
+    runner2 = AgentRunner(settings, StubRegistry(settings), store, client=client2)
+    events2 = [e async for e in runner2.run(session, "追加の質問", {"courts"})]
+    sent = calls2[0]["messages"]
+    assert sent[0]["content"].startswith("解雇の有効性は？")
+    assert all("thinking" != b.get("type") for m in sent[:4] if isinstance(m["content"], list) for b in m["content"])
+    assert "_compacted" not in sent[2]["content"][0]
+    assert session.compacted_upto == 4 and events2[-1]["type"] == "done"
+    assert session.usage["output"] == 10  # 累計
 
 
 async def test_runner_reports_error(settings, tmp_path):

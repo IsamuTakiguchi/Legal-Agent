@@ -14,6 +14,7 @@ from ..models import Hit
 from ..sources.registry import SourceRegistry
 from .citations import resolve_citations
 from .context import RunContext, current_run
+from .costs import UsageTotals, compact_history, strip_private_keys
 from .prompts import SYSTEM_PROMPT
 from .sessions import ChatSession, SessionStore
 from .tools import TOOLS
@@ -67,11 +68,13 @@ class AgentRunner:
         p: dict[str, Any] = {
             "model": self.settings.model,
             "max_tokens": self.settings.max_tokens,
+            # 固定部分（ツール定義 + システムプロンプト）に明示の区切り、会話末尾は自動キャッシュ（ターンごとに前進）
             "system": [{"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
+            "cache_control": {"type": "ephemeral"},
             "thinking": {"type": "adaptive", "display": "summarized"},
             "output_config": {"effort": self.settings.effort},
             "stream": True,
-            "max_iterations": 40,
+            "max_iterations": self.settings.max_iterations,
         }
         if self.settings.fallbacks_enabled and self.settings.model.startswith(("claude-opus-5", "claude-fable")):
             p["betas"] = ["server-side-fallback-2026-07-01"]
@@ -118,15 +121,21 @@ class AgentRunner:
         today = time.strftime("%Y-%m-%d")
         src_note = "、".join(sorted(enabled_sources)) or "なし"
         user_content = f"{user_text}\n\n（本日: {today} / 利用可能ソース: {src_note}）"
-        messages: list[dict[str, Any]] = list(session.messages) + [{"role": "user", "content": user_content}]
+        # 前の質問で取得した本文は圧縮してから送る（Claude の回答文は残るので文脈は保てる）
+        history = [dict(m) for m in session.messages]
+        if len(history) > session.compacted_upto:
+            compact_history(history, len(history))
+            session.compacted_upto = len(history)
+        messages: list[dict[str, Any]] = history + [{"role": "user", "content": user_content}]
         if not session.title:
             session.title = user_text.strip().splitlines()[0][:40]
         session.turns.append({"role": "user", "text": user_text, "ts": time.time()})
 
+        totals = UsageTotals()
         last_message = None
         restarts = 0
         while True:
-            runner = self.client.beta.messages.tool_runner(tools=TOOLS, messages=messages, **self._request_params())
+            runner = self.client.beta.messages.tool_runner(tools=TOOLS, messages=strip_private_keys(messages), **self._request_params())
             last_message = None
             async for stream in runner:
                 async for ev in stream:
@@ -144,6 +153,8 @@ class AgentRunner:
                             ctx.emit({"type": "text_block_end"})
                 msg = await stream.get_final_message()
                 last_message = msg
+                totals.add(getattr(msg, "usage", None))
+                ctx.emit({"type": "usage", **totals.to_dict(self.settings.model)})
                 messages.append({"role": "assistant", "content": serialize_content(msg.content)})
                 if msg.stop_reason == "tool_use":
                     resp = await runner.generate_tool_call_response()
@@ -165,14 +176,19 @@ class AgentRunner:
         text, cites = resolve_citations(final_text, ctx.hits)
         session.hits = {ref: h.to_dict() for ref, h in ctx.hits.items()}
         session.messages = messages
-        session.turns.append({"role": "assistant", "text": text, "citations": [c.to_dict() for c in cites], "ts": time.time()})
+        usage = totals.to_dict(self.settings.model)
+        cumulative = UsageTotals()
+        cumulative.add_dict(session.usage)
+        cumulative.add_dict(usage)
+        session.usage = cumulative.to_dict(self.settings.model)
+        session.turns.append({"role": "assistant", "text": text, "citations": [c.to_dict() for c in cites], "ts": time.time(), "usage": usage})
         self.store.save(session)
-        usage = getattr(last_message, "usage", None)
         ctx.emit({
             "type": "done",
             "text": text,
             "citations": [c.to_dict() for c in cites],
             "session_id": session.id,
             "title": session.title,
-            "usage": {"input": getattr(usage, "input_tokens", 0), "output": getattr(usage, "output_tokens", 0)} if usage else None,
+            "usage": usage,
+            "session_usage": session.usage,
         })

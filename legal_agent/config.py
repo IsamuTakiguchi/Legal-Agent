@@ -61,8 +61,13 @@ class Settings(BaseSettings):
     max_fetches_per_run: int = 6
     min_interval_sec: float = 1.0
 
-    # 1 回のツール呼び出しで返す本文の最大文字数（続きは offset で取得）
-    max_text_chars: int = 12000
+    # トークン節約: 本文は初回 initial_text_chars 字（要旨付き）、続きは 1 回 max_text_chars 字ずつ
+    initial_text_chars: int = 3000
+    max_text_chars: int = 6000
+    # 書籍 1 ページあたりの上限文字数
+    max_page_chars: int = 4000
+    # 1 質問あたりのツール呼び出し上限（暴走防止）
+    max_iterations: int = 24
 
     @field_validator("pdf_dirs", mode="before")
     @classmethod

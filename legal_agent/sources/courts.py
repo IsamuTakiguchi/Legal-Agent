@@ -23,7 +23,7 @@ from bs4 import BeautifulSoup
 
 from ..config import Settings
 from ..models import Document, Hit
-from .base import slice_text
+from .base import focus_excerpts, slice_text
 
 BASE = "https://www.courts.go.jp/"
 SEARCH_URL = BASE + "hanrei/search1/index.html"
@@ -229,13 +229,25 @@ class CourtsSource:
         else:
             data = await self._download(case_id)
             cache.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
-        text, total = slice_text(data["text"], offset, self.settings.max_text_chars)
+        focus = (options.get("focus") or "").strip()
+        full = data["text"]
+        if focus:
+            # キーワード周辺だけ（トークン節約）
+            text = focus_excerpts(full, focus) or f"（「{focus}」は本文中に見つかりませんでした。全 {len(full)} 字。offset で本文を読むか別の語で focus してください）"
+            total = len(full)
+            offset = 0
+        else:
+            # 初回は要旨 + 冒頭のみ。続きは offset で 1 回 max_text_chars 字ずつ
+            limit = self.settings.initial_text_chars if offset == 0 else self.settings.max_text_chars
+            text, total = slice_text(full, offset, limit)
         meta = {k: data["meta"].get(k, "") for k in ("事件番号", "事件名", "裁判年月日", "法廷名", "裁判所名", "裁判種別", "結果", "判示事項", "裁判要旨", "参照法条")}
         meta = {k: v for k, v in meta.items() if v}
+        if focus:
+            meta["抜粋"] = f"focus=「{focus}」の周辺のみ（全 {total} 字）"
         title = f"{data['meta'].get('事件番号', '')} {data['meta'].get('事件名', '')}".strip() or f"裁判例 {case_id}"
         return Document(
             ref=f"courts:{case_id}", source=self.name, kind="case", title=title, text=text,
-            url=data["detail_url"], meta=meta, offset=offset, total_chars=total,
+            url=data["detail_url"], meta=meta, offset=offset, total_chars=total if not focus else len(text),
         )
 
     async def _download(self, case_id: str) -> dict:

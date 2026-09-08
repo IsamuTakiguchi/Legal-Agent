@@ -18,11 +18,14 @@ class ChatSession:
     messages: list[dict[str, Any]] = field(default_factory=list)  # API に渡す形式そのまま
     turns: list[dict[str, Any]] = field(default_factory=list)  # UI 表示用 {role, text, citations}
     hits: dict[str, dict[str, Any]] = field(default_factory=dict)  # ref → Hit dict（引用解決用）
+    usage: dict[str, Any] = field(default_factory=dict)  # セッション累計のトークン使用量
+    compacted_upto: int = 0  # messages のうち圧縮済みの範囲
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id, "title": self.title, "created_at": self.created_at, "updated_at": self.updated_at,
             "messages": self.messages, "turns": self.turns, "hits": self.hits,
+            "usage": self.usage, "compacted_upto": self.compacted_upto,
         }
 
     @classmethod

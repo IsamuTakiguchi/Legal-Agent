@@ -65,7 +65,13 @@ class LocalPDFSource:
         if doc is None:
             raise KeyError(f"書籍 ID {doc_id} は索引にありません。search_books の結果の book_id を使ってください。")
         rows = await asyncio.to_thread(self.db.get_pages, doc_id, page, span)
-        chunks = [f"――― p.{r['page_no']} ―――\n{r['text'].strip()}" for r in rows]
+        cap = self.settings.max_page_chars
+        chunks = []
+        for r in rows:
+            body = r["text"].strip()
+            if len(body) > cap:
+                body = body[:cap] + f"\n（このページは長いため {cap} 字で省略。全 {len(r['text'])} 字）"
+            chunks.append(f"――― p.{r['page_no']} ―――\n{body}")
         text = "\n\n".join(chunks)
         return Document(
             ref=self.make_ref(doc_id, page),

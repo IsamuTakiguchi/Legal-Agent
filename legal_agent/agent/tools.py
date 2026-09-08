@@ -83,7 +83,7 @@ async def search_cases(
     date_from: str | None = None,
     date_to: str | None = None,
     court: str | None = None,
-    limit: int = 10,
+    limit: int = 8,
 ) -> str:
     """裁判例（判例）を検索する。結果の各行に [ref=...] が付くので、引用時はその ref を使う。
 
@@ -108,23 +108,27 @@ async def search_cases(
 
 
 @beta_async_tool
-async def get_case(source: str, case_id: str, offset: int = 0) -> str:
-    """裁判例の詳細情報と判決本文を取得する。長い判決は offset を進めて続きを読む。
+async def get_case(source: str, case_id: str, offset: int = 0, focus: str | None = None) -> str:
+    """裁判例の詳細情報（判示事項・裁判要旨）と判決本文を取得する。
+
+    トークン節約のため、初回は要旨と本文冒頭だけを返す。特定の論点の判示を確認したいときは focus に
+    キーワードを指定すると、その周辺だけを返す（全文を読むより大幅に少ない）。全文が必要な場合のみ offset で続きを読む。
 
     Args:
         source: "courts" または "tkc"。
         case_id: search_cases の結果の ref から source: を除いた ID（例: ref=courts:96174 なら "96174"）。
-        offset: 本文の読み始め位置（文字数）。前回の応答に示された続きの位置を指定する。
+        offset: 本文の読み始め位置（文字数）。前回の応答に示された続きの位置を指定する。focus 指定時は無視。
+        focus: 本文中で探すキーワード（スペース区切りで複数可）。周辺 800 字の窓を最大 5 つ返す。
     """
     ctx = _ctx()
     if source not in CASE_SOURCES:
         return f"source は {', '.join(CASE_SOURCES)} のいずれかです。"
-    ctx.emit({"type": "tool_call", "name": "get_case", "input": {"source": source, "case_id": case_id, "offset": offset}})
-    return await _run_fetch(ctx, source, case_id, offset=offset)
+    ctx.emit({"type": "tool_call", "name": "get_case", "input": {"source": source, "case_id": case_id, "offset": offset, "focus": focus}})
+    return await _run_fetch(ctx, source, case_id, offset=offset, focus=focus or "")
 
 
 @beta_async_tool
-async def search_books(query: str, sources: list[str] | None = None, book_id: str | None = None, limit: int = 10) -> str:
+async def search_books(query: str, sources: list[str] | None = None, book_id: str | None = None, limit: int = 8) -> str:
     """法律書籍・文献を検索する。手持ち書籍PDFはページ単位でヒットし、[ref=local:<book_id>:p<ページ>] が付く。
 
     Args:
@@ -147,14 +151,14 @@ async def search_books(query: str, sources: list[str] | None = None, book_id: st
 
 
 @beta_async_tool
-async def get_book_pages(source: str, book_id: str, page: int = 1, span: int = 1, offset: int = 0) -> str:
-    """書籍の該当ページ本文を読む。手持ち書籍PDFは指定ページの前後 span ページをまとめて返す。
+async def get_book_pages(source: str, book_id: str, page: int = 1, span: int = 0, offset: int = 0) -> str:
+    """書籍の該当ページ本文を読む。手持ち書籍PDFは指定ページ（span を付ければ前後のページも）を返す。
 
     Args:
         source: "local" または "legal_library"。
         book_id: search_books の結果の book_id（local）または ref から source: を除いた ID（legal_library）。
         page: 読みたいページ番号（local のみ有効）。
-        span: 前後に含めるページ数（0〜3。local のみ有効）。
+        span: 前後に含めるページ数（0〜3。既定 0 = そのページだけ。文脈が足りないときだけ 1 にする。local のみ有効）。
         offset: 本文の読み始め位置（legal_library の長文用）。
     """
     ctx = _ctx()

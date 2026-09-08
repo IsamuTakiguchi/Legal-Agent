@@ -198,7 +198,7 @@ class IndexDB:
         return hits
 
 
-def make_snippet(text: str, query: str, width: int = 160) -> str:
+def make_snippet(text: str, query: str, width: int = 120) -> str:
     """検索語の最初の出現位置を中心に抜粋を作る。"""
     flat = _WS_RE.sub(" ", text)
     terms = [t for t in _WS_RE.split(query) if t]

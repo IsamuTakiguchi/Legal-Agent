@@ -259,6 +259,12 @@ async function startAutoconf(site) {
   }, 4000);
 }
 function setStatus(t) { $("#statusLine").textContent = t; }
+function usageText(u) {
+  if (!u) return "";
+  const n = (x) => (x || 0).toLocaleString();
+  const cost = u.cost_usd != null ? ` / 約 $${u.cost_usd.toFixed(3)}` : "";
+  return `入力 ${n(u.total_input)}（うちキャッシュ読み ${n(u.cache_read)}）/ 出力 ${n(u.output)} トークン${cost}`;
+}
 function enabledSources() { return [...document.querySelectorAll("input[data-src]")].filter(i => i.checked).map(i => i.dataset.src); }
 
 // --- セッション ---
@@ -347,8 +353,9 @@ $("#form").onsubmit = async (e) => {
             break; }
           case "login_required": setStatus(`${labelOf(ev.site)} は未ログインです。右上の「ログイン」から手動でログインしてください。`); loadStatus(); break;
           case "memo_saved": setStatus(`メモを保存しました: ${ev.path}`); break;
+          case "usage": setStatus("調査中… " + usageText(ev)); break;
           case "done": out.innerHTML = md(ev.text); renderCites(ev.citations); state.sessionId = ev.session_id;
-            setStatus(ev.usage ? `完了（入力 ${ev.usage.input} / 出力 ${ev.usage.output} トークン）` : "完了"); break;
+            setStatus("完了 " + usageText(ev.usage) + (ev.session_usage && ev.session_usage.cost_usd != null ? `｜このセッション累計 約 $${ev.session_usage.cost_usd.toFixed(2)}` : "")); break;
           case "error": out.innerHTML += `<p class="err">エラー: ${esc(ev.message)}</p>`; setStatus("エラー"); break;
         }
       }
