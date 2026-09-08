@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     legal_library_user: str = ""
     legal_library_password: str = ""
 
+    # LEGAL LIBRARY は利用規約第 8 条で「自動化された手段によるアクセス」「AI 等の使用」を禁じているため既定で無効。
+    # 無効時はアプリからサイトへ一切アクセスせず、利用者が自分で検索するためのリンクを案内するだけになる。
+    # 運営会社（株式会社 Legal Technology）から書面で許諾を得た場合のみ true にすること。
+    legal_library_enabled: bool = False
+
     # 起動時の自動処理
     auto_index: bool = True
     auto_login: bool = True

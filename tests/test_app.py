@@ -27,7 +27,11 @@ def test_status_and_sessions(client):
     assert c.post("/api/login/other").status_code == 404
     assert c.get("/api/login/tkc").json() == {"waiting": False, "logged_in": None, "result": None, "error": None}
     assert c.post("/api/autoconf/other", json={}).status_code == 404
-    ac = c.get("/api/autoconf/legal_library").json()
+    # LEGAL LIBRARY は既定で規約によりアクセスしない → ログイン・自動設定は 400
+    assert c.get("/api/autoconf/legal_library").status_code == 400
+    assert c.post("/api/login/legal_library").status_code == 400
+    assert st["sources"]["legal_library"]["available"] is False and st["sources"]["legal_library"]["requires_login"] is False
+    ac = c.get("/api/autoconf/tkc").json()
     assert ac["waiting"] is False and ac["running"] is False
     assert st["sources"]["tkc"]["auto_login"] is False and st["sources"]["tkc"]["configured"] is False
     assert st["indexing"] is False and st["auto_configure"] is True

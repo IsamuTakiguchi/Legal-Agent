@@ -54,7 +54,13 @@ def run_setup(non_interactive: bool = False) -> None:
         env["ANTHROPIC_API_KEY"] = _ask("Anthropic API キー", env.get("ANTHROPIC_API_KEY", ""), secret=True)
         env["LEGAL_AGENT_PDF_DIRS"] = _ask("書籍 PDF のフォルダ（複数はカンマ区切り。無ければ空）", env.get("LEGAL_AGENT_PDF_DIRS", ""))
         print("\n契約サービスの自動ログイン設定（ID/パスワードは .env に保存されます。空にすれば手動ログイン）")
-        for site, label in (("tkc", "TKC ローライブラリー"), ("legal_library", "LEGAL LIBRARY")):
+        sites = [("tkc", "TKC ローライブラリー")]
+        if env.get("LEGAL_AGENT_LEGAL_LIBRARY_ENABLED", "").lower() == "true":
+            sites.append(("legal_library", "LEGAL LIBRARY"))
+        else:
+            print("※ LEGAL LIBRARY は利用規約第 8 条（自動化手段によるアクセス・AI 等の使用の禁止）により、アプリからはアクセスしません。")
+            print("  運営会社の許諾を得た場合のみ .env に LEGAL_AGENT_LEGAL_LIBRARY_ENABLED=true を追加して setup をやり直してください。")
+        for site, label in sites:
             if _yes(f"{label} を使いますか？", True):
                 uk, pk = f"LEGAL_AGENT_{site.upper()}_USER", f"LEGAL_AGENT_{site.upper()}_PASSWORD"
                 env[uk] = _ask(f"  {label} のログイン ID", env.get(uk, ""))

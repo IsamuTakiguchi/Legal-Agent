@@ -58,7 +58,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await asyncio.sleep(INDEX_RESCAN_SEC)
 
     async def startup_login() -> None:
-        for site in LOGIN_SITES:
+        for site in registry.login_sites():
             user, password = settings.credentials(site)
             if not (user and password):
                 continue
@@ -144,6 +144,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def _check_site(site: str) -> None:
         if site not in LOGIN_SITES:
             raise HTTPException(404, "対象は tkc / legal_library です")
+        if site not in registry.login_sites():
+            raise HTTPException(400, f"{site} は利用規約によりアプリからアクセスしない設定です（README の「利用規約の確認結果」参照）")
 
     @app.post("/api/login/{site}")
     async def login(site: str, request: Request) -> dict[str, Any]:

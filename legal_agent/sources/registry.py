@@ -7,7 +7,7 @@ from ..browser.session import BrowserSession
 from ..config import Settings
 from .base import Source
 from .courts import CourtsSource
-from .legal_library import LegalLibrarySource
+from .legal_library import LegalLibraryLinkSource, LegalLibrarySource
 from .local_pdf import LocalPDFSource
 from .tkc import TKCSource
 
@@ -22,7 +22,10 @@ class SourceRegistry:
         self.local = LocalPDFSource(settings)
         self.courts = CourtsSource(settings)
         self.tkc = TKCSource(settings, self.browser)
-        self.legal_library = LegalLibrarySource(settings, self.browser)
+        # LEGAL LIBRARY は規約第 8 条により既定でリンク案内のみ（sources/legal_library.py 参照）
+        self.legal_library: Source = (
+            LegalLibrarySource(settings, self.browser) if settings.legal_library_enabled else LegalLibraryLinkSource(settings)
+        )
         self._all: dict[str, Source] = {
             "courts": self.courts,
             "tkc": self.tkc,
@@ -38,11 +41,15 @@ class SourceRegistry:
     def names(self) -> list[str]:
         return list(self._all)
 
+    def login_sites(self) -> list[str]:
+        """ブラウザログインを扱うソース名。"""
+        return [n for n, s in self._all.items() if getattr(s, "requires_login", False)]
+
     def site_config(self, name: str) -> dict[str, Any]:
         src = self._all[name]
         cfg = getattr(src, "cfg", None)
         if cfg is None:
-            raise KeyError(f"{name} はログイン不要のソースです")
+            raise KeyError(f"{name} はブラウザログインを使わないソースです")
         return cfg
 
     async def statuses(self) -> dict[str, dict[str, Any]]:
