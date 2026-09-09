@@ -27,6 +27,24 @@ def cmd_serve(args: argparse.Namespace) -> None:
     uvicorn.run(create_app(s), host=host, port=port, log_level="info")
 
 
+def cmd_update(args: argparse.Namespace) -> None:
+    from .updater import check_and_update
+
+    s = get_settings()
+    if not s.auto_update and not args.force:
+        print("自動更新は無効です（LEGAL_AGENT_AUTO_UPDATE=false）。--force で実行できます。")
+        return
+    st = check_and_update(s.update_repo, s.update_branch, apply=not args.check)
+    if st.error:
+        print(f"更新の確認に失敗（そのまま起動します）: {st.error}", file=sys.stderr)
+    elif st.applied:
+        print(st.message)
+    elif st.available:
+        print(f"新しい版があります: {st.latest[:7]}（現在 {st.current[:7] or '不明'}）")
+    else:
+        print(st.message or "最新版です")
+
+
 def cmd_setup(args: argparse.Namespace) -> None:
     from .setup_wizard import run_setup
 
@@ -108,6 +126,10 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--port", type=int)
     p.add_argument("--no-open", action="store_true")
     p.set_defaults(fn=cmd_serve)
+    p = sub.add_parser("update", help="GitHub の最新版に更新（start.bat が起動前に自動実行）")
+    p.add_argument("--check", action="store_true", help="確認だけ行い、更新しない")
+    p.add_argument("--force", action="store_true")
+    p.set_defaults(fn=cmd_update)
     p = sub.add_parser("setup", help="ターミナル版セットアップ（通常はブラウザ上で行うので不要）")
     p.add_argument("--non-interactive", action="store_true")
     p.set_defaults(fn=cmd_setup)

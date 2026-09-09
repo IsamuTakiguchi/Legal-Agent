@@ -20,8 +20,10 @@ from . import onedrive
 from .onedrive import describe_dir, list_pdf_folders, strip_quotes
 from .setup_wizard import apply_setup, login_sites_enabled, validate_api_key
 from .sources.registry import SourceRegistry
+from .updater import check_and_update
 
 log = logging.getLogger(__name__)
+UPDATE_CHECK_SEC = 3600
 STATIC_DIR = Path(__file__).with_name("static")
 LOGIN_SITES = ("tkc", "legal_library")
 INDEX_RESCAN_SEC = 3600
@@ -51,7 +53,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     login_tasks: dict[str, asyncio.Task] = {}
     autoconf_tasks: dict[str, asyncio.Task] = {}
     chat_lock = asyncio.Lock()
-    bg: dict[str, Any] = {"indexing": False, "index_result": None, "startup_login": {}}
+    bg: dict[str, Any] = {"indexing": False, "index_result": None, "startup_login": {}, "update": None}
     bg_tasks: list[asyncio.Task] = []
     index_wake = asyncio.Event()  # セットアップ完了時などに即時再スキャンさせる
 
@@ -70,6 +72,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 await asyncio.wait_for(index_wake.wait(), timeout=INDEX_RESCAN_SEC)
             except asyncio.TimeoutError:
                 pass
+
+    async def update_check_loop() -> None:
+        # 稼働中は確認だけ行い、更新は次回起動時（start.bat）に適用する
+        await asyncio.sleep(60)
+        while True:
+            try:
+                st = await asyncio.to_thread(check_and_update, settings.update_repo, settings.update_branch, False)
+                bg["update"] = st.to_dict()
+            except Exception as e:  # noqa: BLE001
+                bg["update"] = {"error": str(e)}
+            await asyncio.sleep(UPDATE_CHECK_SEC)
 
     async def startup_login() -> None:
         for site in registry.login_sites():
@@ -91,6 +104,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             bg_tasks.append(asyncio.create_task(auto_index_loop()))
         if settings.auto_login:
             bg_tasks.append(asyncio.create_task(startup_login()))
+        if settings.auto_update:
+            bg_tasks.append(asyncio.create_task(update_check_loop()))
         yield
         for t in bg_tasks:
             t.cancel()
@@ -119,6 +134,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "pdf_dirs": [str(p) for p in settings.pdf_dirs],
             "pdf_dirs_status": await asyncio.to_thread(lambda: [describe_dir(p) for p in settings.pdf_dirs]),
             "auto_configure": settings.auto_configure,
+            "update": bg["update"],
             "limits": {
                 "max_searches_per_source": settings.max_searches_per_source,
                 "max_fetches_per_run": settings.max_fetches_per_run,

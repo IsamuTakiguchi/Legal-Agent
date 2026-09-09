@@ -209,7 +209,7 @@ $("#setupForm").onsubmit = async (e) => {
 async function loadStatus() {
   const st = await (await fetch("/api/status")).json();
   if (st.needs_setup) showSetup(); else hideSetup();
-  $("#model").textContent = `${st.model} / effort=${st.effort}`;
+  $("#model").textContent = `${st.model} / effort=${st.effort}` + (st.update && st.update.available && !st.update.applied ? "｜新しい版あり（次回起動時に自動更新）" : "");
   state.sources = st.sources;
   const box = $("#sources"); box.innerHTML = "";
   for (const name of SOURCE_ORDER) {

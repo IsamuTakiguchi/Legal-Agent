@@ -55,6 +55,10 @@ class Settings(BaseSettings):
     auto_open_browser: bool = True
     # Claude によるセレクタ自動発見（ログイン後の画面構造を解析して data/selectors.override.yaml に保存）
     auto_configure: bool = True
+    # 自動更新: 起動時に GitHub の最新版を取り込み、稼働中も 1 時間ごとに確認する
+    auto_update: bool = True
+    update_repo: str = "IsamuTakiguchi/Legal-Agent"
+    update_branch: str = "claude/legal-search-agent-app-9xw9z8"
     autoconf_model: str = "claude-opus-5"
 
     max_searches_per_source: int = 3

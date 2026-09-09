@@ -13,5 +13,7 @@ if %errorlevel%==0 (
     start "" http://127.0.0.1:8765/
     exit /b
 )
+echo 最新版を確認しています...
+".venv\Scripts\python.exe" -m legal_agent update
 echo Legal-Agent を起動しています。このウィンドウは閉じないでください（最小化して構いません）。
 start "Legal-Agent" /min ".venv\Scripts\python.exe" -m legal_agent serve

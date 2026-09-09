@@ -6,4 +6,5 @@ if curl -sf --max-time 2 http://127.0.0.1:8765/api/status >/dev/null 2>&1; then
   python3 -c 'import webbrowser; webbrowser.open("http://127.0.0.1:8765/")' 2>/dev/null || open http://127.0.0.1:8765/ 2>/dev/null || true
   exit 0
 fi
+.venv/bin/python -m legal_agent update || true
 exec .venv/bin/python -m legal_agent serve
