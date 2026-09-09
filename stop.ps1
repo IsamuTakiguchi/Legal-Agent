@@ -1,0 +1,32 @@
+﻿# Stop the Legal-Agent server (Windows).
+
+$ErrorActionPreference = "Continue"
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$AppHome = Join-Path $env:LOCALAPPDATA "Legal-Agent"
+$Here = $PSScriptRoot
+$Py = Join-Path $AppHome "python\python.exe"
+$Url = "http://127.0.0.1:8765/"
+Add-Type -AssemblyName System.Windows.Forms | Out-Null
+function Msg([string]$text, [string]$title = "Legal-Agent") {
+    [System.Windows.Forms.MessageBox]::Show($text, $title) | Out-Null
+}
+function Test-Server {
+    try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 ($Url + "api/status") | Out-Null; return $true } catch { return $false }
+}
+function Test-Py {
+    if (-not (Test-Path $Py)) { return $false }
+    & $Py -c "import sys" 2>$null | Out-Null
+    return ($LASTEXITCODE -eq 0)
+}
+function Invoke-Home([string]$script) {
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $AppHome $script)
+    exit $LASTEXITCODE
+}
+
+$n = 0
+Get-CimInstance Win32_Process -Filter "Name = 'python.exe'" | Where-Object { $_.CommandLine -like "*legal_agent*serve*" } | ForEach-Object {
+    Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+    $n++
+}
+Msg ("Legal-Agent を停止しました（" + $n + " プロセス）。")
+exit 0

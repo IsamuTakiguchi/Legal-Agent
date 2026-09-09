@@ -24,7 +24,7 @@ log = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parents[1]
 STATE_FILE = ROOT / ".update.json"
-PRESERVE = {".env", "data", ".venv", ".git", "__pycache__", ".update.json", ".pytest_cache"}
+PRESERVE = {".env", "data", ".venv", ".git", "__pycache__", ".update.json", ".pytest_cache", "python", "logs"}
 API = "https://api.github.com"
 UA = "LegalAgent-updater/0.1"
 

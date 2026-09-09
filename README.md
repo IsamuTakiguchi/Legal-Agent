@@ -22,10 +22,11 @@ LegalBrain エージェント / Legalscape のような使い勝手を、**自�
 
 ### どこにインストールされるか・成功したかの確認
 
-- アプリ本体は **`C:\Users\<名前>\AppData\Local\Legal-Agent`** に入ります。`install.bat` をどこでダブルクリックしても、まずそこへコピーしてから導入します（OneDrive の同期フォルダや日本語を含む長いパスの中では Python 環境が壊れるため）。その中に `.venv`（Python 環境）、`.env`（設定）、`data`（索引・履歴・サーバーログ・状態報告）ができます。Program Files やレジストリには何も入りません。アンインストールはこのフォルダを削除するだけです。エクスプローラーのアドレス欄に `%LOCALAPPDATA%\Legal-Agent` と入力すると開けます。
+- アプリ本体は **`C:\Users\<名前>\AppData\Local\Legal-Agent`** に入ります。`install.bat` をどこでダブルクリックしても、まずそこへコピーしてから導入します（OneDrive の同期フォルダや日本語を含む長いパスの中では Python 環境が壊れるため）。その中に `python`（アプリ専用の Python。PC 本体には Python を入れず、管理者権限も不要）、`.env`（設定）、`data`（索引・履歴・サーバーログ・状態報告）、`logs`（導入ログ）ができます。Program Files やレジストリには何も入りません。アンインストールはこのフォルダとデスクトップのショートカットを削除するだけです。エクスプローラーのアドレス欄に `%LOCALAPPDATA%\Legal-Agent` と入力すると開けます。
+- 導入・起動・確認は PowerShell スクリプト（`install.ps1` / `start.ps1` / `check.ps1` / `stop.ps1`）が行い、同名の `.bat` はそれを呼ぶだけです。成功でも失敗でも必ずメッセージ窓で結果を知らせ、失敗時はログをメモ帳で開きます。サーバーは画面に出ないバックグラウンドで動き、止めるときは `stop.bat` をダブルクリックします。
 - 成功していれば、①ブラウザが開いて「はじめに設定（1 回だけ）」の画面が出る、②デスクトップに「Legal-Agent」ショートカットがある、③タスクバーに「Legal-Agent server」の最小化ウィンドウがある、の 3 点が揃います。
 - 分からないときは **`check.bat` をダブルクリック**してください。インストール先、Python、設定、索引の冊数、サーバーが起動中かを調べ、結果を `data\status.txt` に書いて**メモ帳で開きます**（黒い画面がすぐ消えても内容は残ります）。まだ導入されていない場合も、フォルダの中身と `install.log` をまとめて表示します。
-- 記録は `install.log`（導入時）と `data\server.log`（起動後）に残ります。うまく動かないときは、メモ帳で開いた `status.txt` の内容を送っていただければ原因が分かります。
+- 記録は `logs\install-*.log`（導入時）と `data\server.log`（起動後）に残ります。うまく動かないときは、メモ帳で開いた `status.txt` やログの内容を送っていただければ原因が分かります。
 - 初回ダブルクリック時に「Windows によって PC が保護されました」と出た場合は「詳細情報」→「実行」で進めます（インターネットから取得したファイルに付く警告で、2 回目以降は出ないよう処理します）。
 
 - API キーは [Anthropic コンソール](https://console.anthropic.com/settings/keys) で「Create Key」を押して発行します（これだけは自動化できません）。キーはこの PC の `.env` にのみ保存されます。
@@ -37,7 +38,7 @@ LegalBrain エージェント / Legalscape のような使い勝手を、**自�
 
 ### うまく動かないとき
 
-- `install.bat` で Python のインストールに失敗する（winget が無い等）: 開いた python.org のページからインストーラーを実行し、「Add python.exe to PATH」にチェックを入れてから `install.bat` をもう一度ダブルクリック。
+- 導入が「Python のダウンロード」で失敗する: ネットワーク（プロキシ・セキュリティソフト）が python.org / pypi.org への接続を止めていないか確認し、`install.bat` をもう一度ダブルクリック。
 - 「ポートが使用中」: 既に起動しています。ブラウザで http://127.0.0.1:8765/ を開くか、`.env` に `LEGAL_AGENT_PORT=8766` を追加。
 - 画面が開かない: `start.bat` の黒いウィンドウを閉じていないか確認し、http://127.0.0.1:8765/ を直接開く。
 
@@ -107,7 +108,7 @@ LEGAL_AGENT_DEBUG_DUMP=1 python -m legal_agent autoconf tkc
 legal_agent/
   app.py            FastAPI（/api/chat は SSE でストリーミング。起動時に索引更新・自動ログイン）
   setup_wizard.py   セットアップ処理（ブラウザ版 /api/setup とターミナル版で共用）
-install.bat / start.bat   Windows 用の導入・起動（install.sh / start.sh は macOS・Linux 用）
+install.ps1 / start.ps1 / check.ps1 / stop.ps1   Windows 用の導入・起動・確認・停止（同名 .bat は呼び出し用。install.sh / start.sh は macOS・Linux 用）
   static/index.html チャット UI + 出典パネル
   agent/            システムプロンプト、ツール、Claude tool_runner、引用解決、セッション保存
   sources/          courts.go.jp / TKC / LEGAL LIBRARY / ローカル PDF（selectors.yaml でサイト設定）

@@ -59,10 +59,14 @@ def _run(after_install: bool, out) -> int:
     if "onedrive" in str(ROOT).lower():
         problems.append("OneDrive の同期フォルダ内にインストールされています。同期やクラウドのみ化で Python が動かなくなるため、install.bat をもう一度ダブルクリックして AppData\\Local\\Legal-Agent に移してください")
     out(f"Python: {platform.python_version()}  {sys.executable}")
-    venv_ok = Path(sys.prefix) == (ROOT / ".venv").resolve() or (ROOT / ".venv").exists()
-    out(f"仮想環境 (.venv): {'あり' if venv_ok else 'なし'}")
-    if not venv_ok:
-        problems.append("仮想環境がありません。install.bat を実行してください")
+    private = ROOT / "python" / "python.exe"
+    if private.exists():
+        out(f"アプリ専用 Python: あり ({private})")
+    elif (ROOT / ".venv").exists():
+        out("Python 環境: .venv（旧方式）")
+    else:
+        out("Python 環境: 見つかりません（install.bat を実行してください）")
+        problems.append("Python 環境がありません。install.bat を実行してください")
 
     try:
         import anthropic, fastapi, pymupdf  # noqa: F401

@@ -7,3 +7,5 @@ data/
 .pytest_cache/
 .update.json
 install.log
+python/
+logs/
