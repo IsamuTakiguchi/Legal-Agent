@@ -45,6 +45,12 @@ def cmd_update(args: argparse.Namespace) -> None:
         print(st.message or "最新版です")
 
 
+def cmd_doctor(args: argparse.Namespace) -> None:
+    from .doctor import run_doctor
+
+    sys.exit(run_doctor(after_install=args.after_install))
+
+
 def cmd_setup(args: argparse.Namespace) -> None:
     from .setup_wizard import run_setup
 
@@ -130,6 +136,9 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--check", action="store_true", help="確認だけ行い、更新しない")
     p.add_argument("--force", action="store_true")
     p.set_defaults(fn=cmd_update)
+    p = sub.add_parser("doctor", help="状態確認（インストール先・設定・索引・サーバー稼働）")
+    p.add_argument("--after-install", action="store_true")
+    p.set_defaults(fn=cmd_doctor)
     p = sub.add_parser("setup", help="ターミナル版セットアップ（通常はブラウザ上で行うので不要）")
     p.add_argument("--non-interactive", action="store_true")
     p.set_defaults(fn=cmd_setup)

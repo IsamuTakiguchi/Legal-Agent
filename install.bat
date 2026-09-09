@@ -1,49 +1,68 @@
 @echo off
-rem Legal-Agent 導入スクリプト（Windows）。ダブルクリックで実行。
-rem  1. Python 3.11+ を探し、無ければ winget で自動インストール
-rem  2. 仮想環境を作ってアプリをインストール
-rem  3. デスクトップに「Legal-Agent」ショートカットを作成
-rem  4. 起動（ブラウザが開き、初回はセットアップ画面が出る）
+rem Legal-Agent installer (Windows). Double-click to run.
+rem Everything is installed INSIDE this folder (.venv, .env, data). Nothing goes to Program Files.
+rem Log: install.log in this folder.
 setlocal EnableDelayedExpansion
 chcp 65001 >nul
+set "PYTHONIOENCODING=utf-8"
+set "PYTHONUTF8=1"
 cd /d "%~dp0"
+set "LOG=%~dp0install.log"
+echo ==== Legal-Agent install %date% %time% ==== >> "%LOG%"
+echo === Legal-Agent install ===
+echo Folder: %~dp0
+echo Log:    %LOG%
+echo.
 
-echo === Legal-Agent 導入 ===
+rem Remove "downloaded from the internet" marks so SmartScreen does not block again
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-ChildItem -Path '%~dp0' -Recurse -File | Unblock-File" >nul 2>&1
+
 set "PY="
 py -3 -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)" >nul 2>&1 && set "PY=py -3"
 if not defined PY python -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)" >nul 2>&1 && set "PY=python"
 
 if not defined PY (
-    echo Python 3.11 以上が見つかりません。winget でインストールします（数分かかります）...
-    winget install -e --id Python.Python.3.12 --silent --accept-package-agreements --accept-source-agreements
-    rem 新しく入った Python を PATH を更新して再検出
+    echo [1/4] Python 3.11+ not found. Installing with winget (this takes a few minutes)...
+    echo [1/4] winget install Python >> "%LOG%"
+    winget install -e --id Python.Python.3.12 --silent --accept-package-agreements --accept-source-agreements >> "%LOG%" 2>&1
     set "PATH=%LOCALAPPDATA%\Programs\Python\Python312;%LOCALAPPDATA%\Programs\Python\Python312\Scripts;%PATH%"
     py -3 -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)" >nul 2>&1 && set "PY=py -3"
     if not defined PY python -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)" >nul 2>&1 && set "PY=python"
 )
 if not defined PY (
-    echo Python を自動インストールできませんでした。ダウンロードページを開きます。
-    echo インストール時に "Add python.exe to PATH" にチェックを入れ、終わったらこのファイルをもう一度ダブルクリックしてください。
+    echo [ERROR] Python could not be installed automatically. >> "%LOG%"
+    echo.
+    echo [ERROR] Python could not be installed automatically.
+    echo Opening https://www.python.org/downloads/windows/ - run the installer,
+    echo check "Add python.exe to PATH", then double-click install.bat again.
     start "" https://www.python.org/downloads/windows/
     pause
     exit /b 1
 )
-echo Python: %PY%
+echo [1/4] Python: %PY%
+echo [1/4] Python: %PY% >> "%LOG%"
 
 if not exist ".venv\Scripts\python.exe" (
-    echo 仮想環境を作成しています...
-    %PY% -m venv .venv || (echo 仮想環境の作成に失敗しました & pause & exit /b 1)
+    echo [2/4] Creating virtual environment (.venv)...
+    %PY% -m venv .venv >> "%LOG%" 2>&1 || (echo [ERROR] venv failed. See install.log & pause & exit /b 1)
+) else (
+    echo [2/4] Virtual environment exists (.venv)
 )
-echo アプリをインストールしています（初回は数分かかります）...
-".venv\Scripts\python.exe" -m pip install --disable-pip-version-check -q --upgrade pip
-".venv\Scripts\python.exe" -m pip install --disable-pip-version-check -q -e . || (echo インストールに失敗しました & pause & exit /b 1)
+echo [3/4] Installing the app and its libraries (first time: a few minutes)...
+".venv\Scripts\python.exe" -m pip install --disable-pip-version-check -q --upgrade pip >> "%LOG%" 2>&1
+".venv\Scripts\python.exe" -m pip install --disable-pip-version-check -q -e . >> "%LOG%" 2>&1 || (echo [ERROR] pip install failed. See install.log & pause & exit /b 1)
+echo [3/4] pip install OK >> "%LOG%"
 
-rem デスクトップにショートカットを作成
+echo [4/4] Creating desktop shortcut "Legal-Agent"...
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$d=[Environment]::GetFolderPath('Desktop'); $s=(New-Object -ComObject WScript.Shell).CreateShortcut(\"$d\Legal-Agent.lnk\"); $s.TargetPath='%~dp0start.bat'; $s.WorkingDirectory='%~dp0'; $s.Description='Legal-Agent を起動'; $s.Save()" >nul 2>&1
-if exist "%USERPROFILE%\Desktop\Legal-Agent.lnk" echo デスクトップに「Legal-Agent」ショートカットを作りました。
+  "$d=[Environment]::GetFolderPath('Desktop'); $s=(New-Object -ComObject WScript.Shell).CreateShortcut(\"$d\Legal-Agent.lnk\"); $s.TargetPath='%~dp0start.bat'; $s.WorkingDirectory='%~dp0'; $s.Description='Start Legal-Agent'; $s.Save()" >> "%LOG%" 2>&1
 
 echo.
-echo 導入が完了しました。起動します（ブラウザが開きます。初回は API キーと書籍フォルダを画面で設定してください）。
+".venv\Scripts\python.exe" -m legal_agent doctor --after-install
+echo.
+echo Starting Legal-Agent now (a browser window will open)...
 call "%~dp0start.bat"
+echo.
+echo Install finished. You can close this window. (Next time: double-click the "Legal-Agent" shortcut on the desktop.)
+pause
 endlocal

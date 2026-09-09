@@ -1,0 +1,99 @@
+"""状態診断（check.bat / `python -m legal_agent doctor`）。どこに入っていて、何ができていて、何が足りないかを日本語で表示する。"""
+from __future__ import annotations
+
+import os
+import platform
+import sys
+import time
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def _tail(path: Path, n: int = 15) -> str:
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        return "\n".join(lines[-n:])
+    except OSError:
+        return ""
+
+
+def run_doctor(after_install: bool = False, out=print) -> int:
+    """戻り値: 0 = 問題なし、1 = 要対応。"""
+    from .config import get_settings
+
+    problems: list[str] = []
+    out("=== Legal-Agent 状態確認 ===")
+    out(f"インストール先: {ROOT}")
+    out(f"  （このフォルダの中だけにインストールされます。Program Files 等には入りません）")
+    out(f"Python: {platform.python_version()}  {sys.executable}")
+    venv_ok = Path(sys.prefix) == (ROOT / ".venv").resolve() or (ROOT / ".venv").exists()
+    out(f"仮想環境 (.venv): {'あり' if venv_ok else 'なし'}")
+    if not venv_ok:
+        problems.append("仮想環境がありません。install.bat を実行してください")
+
+    try:
+        import anthropic, fastapi, pymupdf  # noqa: F401
+
+        out("ライブラリ: インストール済み（anthropic / fastapi / pymupdf）")
+    except Exception as e:  # noqa: BLE001
+        out(f"ライブラリ: 不足（{e}）")
+        problems.append("ライブラリが足りません。install.bat をもう一度実行するか install.log を確認してください")
+
+    s = get_settings()
+    env_path = ROOT / ".env"
+    out(f"設定ファイル (.env): {'あり' if env_path.exists() else 'まだ無い（初回起動時にブラウザ画面で作成されます）'}")
+    if s.needs_setup:
+        out("API キー: 未設定 → 起動後のブラウザ画面で設定してください")
+    else:
+        out("API キー: 設定済み")
+    if s.pdf_dirs:
+        for p in s.pdf_dirs:
+            out(f"書籍 PDF フォルダ: {p}  {'（見つかりません）' if not p.is_dir() else ''}")
+    else:
+        out("書籍 PDF フォルダ: 未設定（ブラウザ画面で選べます）")
+    try:
+        from .index.db import IndexDB
+
+        st = IndexDB(s.db_path).stats()
+        out(f"索引: {st['documents']} 冊 / {st['pages']} ページ  ({s.db_path})")
+    except Exception as e:  # noqa: BLE001
+        out(f"索引: 読めません（{e}）")
+
+    # サーバー稼働確認
+    running = False
+    try:
+        import httpx
+
+        r = httpx.get(f"http://{s.host}:{s.port}/api/status", timeout=2)
+        running = r.status_code == 200
+    except Exception:  # noqa: BLE001
+        running = False
+    url = f"http://{s.host}:{s.port}/"
+    out(f"サーバー: {'起動中 → ' + url if running else '停止中（start.bat またはデスクトップの Legal-Agent で起動）'}")
+
+    upd = ROOT / ".update.json"
+    if upd.exists():
+        out(f"自動更新の記録: {upd.name} あり")
+    log = ROOT / "install.log"
+    if log.exists():
+        out(f"導入ログ: {log}")
+    slog = s.data_dir / "server.log"
+    if slog.exists():
+        out(f"サーバーログ: {slog}")
+        if not running and not after_install:
+            out("--- server.log 末尾 ---")
+            out(_tail(slog))
+
+    out("")
+    if after_install:
+        out("導入は完了しました。この後ブラウザが開き、初回は API キーと書籍フォルダを設定する画面が出ます。")
+        out("ブラウザが開かない場合は、次を開いてください: " + url)
+        return 0
+    if problems:
+        out("要対応:")
+        for p in problems:
+            out(f"  - {p}")
+        return 1
+    out("問題は見つかりませんでした。" + ("" if running else " 起動するには start.bat（デスクトップの Legal-Agent）をダブルクリックしてください。"))
+    return 0
