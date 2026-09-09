@@ -32,6 +32,15 @@ def test_status_and_sessions(client):
         assert st["sources"][site]["available"] is False and st["sources"][site]["requires_login"] is False
         assert "保留" in st["sources"][site]["detail"]
     assert st["indexing"] is False and st["auto_configure"] is True
+    assert st["usage_month"]["cost_usd"] == 0 and st["usage_month"]["over_budget"] is False and st["usage_month"]["calls"] == 0
+    u = c.get("/api/usage").json()
+    assert u["month"] == st["usage_month"]["month"] and u["months"][0]["calls"] == 0 and u["usd_jpy"] == 150.0
+    assert "platform.claude.com" in u["console_url"] and "概算" in u["note"]
+    # 記録すると status / usage に反映される
+    from types import SimpleNamespace
+    app.state.runner.ledger.record(SimpleNamespace(input_tokens=1_000_000, output_tokens=0, cache_read_input_tokens=0, cache_creation_input_tokens=0), "claude-opus-5")
+    assert c.get("/api/status").json()["usage_month"]["cost_usd"] == 5.0
+    assert c.get("/api/usage?months=1").json()["this_month"]["by_model"]["claude-opus-5"]["calls"] == 1
     assert c.get("/").status_code == 200 and "Legal-Agent" in c.get("/").text
 
 

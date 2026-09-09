@@ -61,6 +61,10 @@ class Settings(BaseSettings):
     update_branch: str = "claude/legal-search-agent-app-9xw9z8"
     autoconf_model: str = "claude-opus-5"
 
+    # 利用料の表示: 円換算レートと月額予算（USD、0 で警告なし）
+    usd_jpy: float = 150.0
+    monthly_budget_usd: float = 0.0
+
     max_searches_per_source: int = 3
     max_fetches_per_run: int = 6
     min_interval_sec: float = 1.0
@@ -88,6 +92,10 @@ class Settings(BaseSettings):
     @property
     def cache_dir(self) -> Path:
         return self.data_dir / "cache"
+
+    @property
+    def usage_db_path(self) -> Path:
+        return self.data_dir / "usage.sqlite3"
 
     @property
     def sessions_dir(self) -> Path:

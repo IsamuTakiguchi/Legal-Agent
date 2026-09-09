@@ -45,6 +45,16 @@ def cmd_update(args: argparse.Namespace) -> None:
         print(st.message or "最新版です")
 
 
+def cmd_usage(args: argparse.Namespace) -> None:
+    from .agent.sessions import SessionStore
+    from .agent.usage_ledger import UsageLedger, format_table
+
+    s = get_settings()
+    ledger = UsageLedger(s.usage_db_path)
+    ledger.backfill_from_sessions(SessionStore(s.sessions_dir), s.model)
+    print(format_table(ledger.months(limit=args.months), s.usd_jpy))
+
+
 def cmd_doctor(args: argparse.Namespace) -> None:
     from .doctor import run_doctor
 
@@ -104,7 +114,9 @@ async def _autoconf(site: str, query: str) -> None:
     try:
         src = reg.get(site)
         print(f"{src.label}: Claude で画面構造を解析しています…", file=sys.stderr)
-        cfg = await src.autoconfigure(query)
+        from .agent.usage_ledger import UsageLedger
+
+        cfg = await src.autoconfigure(query, ledger=UsageLedger(s.usage_db_path))
         print("保存しました:", s.selectors_override_path)
         for line in cfg.get("autoconf_log", []):
             print(" -", line)
@@ -146,6 +158,9 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--check", action="store_true", help="確認だけ行い、更新しない")
     p.add_argument("--force", action="store_true")
     p.set_defaults(fn=cmd_update)
+    p = sub.add_parser("usage", help="API の月額利用料（概算）を月別に表示")
+    p.add_argument("--months", type=int, default=12)
+    p.set_defaults(fn=cmd_usage)
     p = sub.add_parser("doctor", help="状態確認（インストール先・設定・索引・サーバー稼働）")
     p.add_argument("--after-install", action="store_true")
     p.add_argument("--file", help="レポートをこのファイルにも書く（UTF-8、メモ帳で開ける）")

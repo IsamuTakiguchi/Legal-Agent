@@ -138,6 +138,16 @@ tests/              パーサ・索引・ツール・ランナー・API・疑似
 | `LEGAL_AGENT_MAX_FETCHES_PER_RUN=4` | 1 質問で読む本文の件数を減らす |
 | `LEGAL_AGENT_INITIAL_TEXT_CHARS` / `LEGAL_AGENT_MAX_TEXT_CHARS` | 判決文の初回・続き読みの文字数 |
 
+### 月額利用料の確認
+
+画面上部の「今月 約 $X（約 Y 円）」を押すと、月別の API 利用料（概算）が開きます。回数・トークン数・概算 USD／JPY を月ごとに表示し、今月はモデル別の内訳も出ます。アプリが行ったすべての Claude API 呼び出し（質問への回答、サイトの自動設定）を `data\usage.sqlite3` に記録し、単価表から計算しています。
+
+- 数字は概算です。正式な請求額は [Anthropic Console の Cost ページ](https://platform.claude.com/cost) で確認してください（Anthropic の公式コスト API は個人アカウントでは使えないため、アプリは自前で記録します）。
+- 換算レートは既定 1 USD = 150 円。`.env` の `LEGAL_AGENT_USD_JPY=155` のように変更できます。
+- `LEGAL_AGENT_MONTHLY_BUDGET_USD=30` のように月額予算（USD）を入れると、超過時に上部の表示が赤くなります。
+- ターミナルでは `python -m legal_agent usage` で月別表を出せます。`check.bat` の状態報告にも今月の概算が載ります。
+- 導入前のセッション履歴に残っている使用量は、初回起動時に 1 回だけ台帳へ取り込みます。
+
 ## 開発
 
 ```bash

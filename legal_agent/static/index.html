@@ -78,6 +78,22 @@
   .setup button:disabled { opacity: .5; }
   .chat.setup-mode .compose, .chat.setup-mode .log { display: none; }
   .chat.setup-mode { grid-template-rows: 1fr; overflow: auto; }
+  header .usage { font-size: 12px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--chip); color: var(--ink); cursor: pointer; }
+  header .usage.over { color: var(--warn); border-color: var(--warn); font-weight: 600; }
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: flex; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow: auto; z-index: 20; }
+  .overlay[hidden] { display: none; }
+  .panel { background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; padding: 18px 22px; width: min(820px, 100%); }
+  .panel h2 { font-size: 16px; margin: 0 0 4px; display: flex; align-items: center; }
+  .panel h2 button { margin-left: auto; font-size: 12px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--chip); color: var(--ink); cursor: pointer; }
+  .panel .big { font-size: 26px; font-weight: 700; margin: 10px 0 2px; }
+  .panel .big small { font-size: 14px; font-weight: 400; color: var(--muted); margin-left: 8px; }
+  .panel table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 10px; }
+  .panel th, .panel td { padding: 5px 6px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+  .panel th:first-child, .panel td:first-child { text-align: left; }
+  .panel th { color: var(--muted); font-weight: 600; }
+  .panel tr.cur td { font-weight: 600; }
+  .panel .note { color: var(--muted); font-size: 12px; margin-top: 10px; line-height: 1.6; }
+  .panel .note a { color: var(--accent); }
   @media (max-width: 1000px) { main { grid-template-columns: 1fr; } aside, .cites { display: none; } }
 </style>
 </head>
@@ -85,8 +101,15 @@
 <header>
   <h1>Legal-Agent</h1>
   <span class="model" id="model"></span>
+  <button type="button" class="usage" id="usageBtn" title="今月の API 利用料（概算）。クリックで月別の明細">今月 —</button>
   <div class="sources" id="sources"></div>
 </header>
+<div class="overlay" id="usageOverlay" hidden>
+  <div class="panel" role="dialog" aria-labelledby="usageTitle">
+    <h2 id="usageTitle">API 利用料（概算）<button type="button" id="usageClose">閉じる</button></h2>
+    <div id="usageBody"><div class="hint">読み込み中…</div></div>
+  </div>
+</div>
 <main>
   <aside>
     <button class="new" id="newSession">＋ 新しい調査</button>
@@ -210,6 +233,7 @@ async function loadStatus() {
   const st = await (await fetch("/api/status")).json();
   if (st.needs_setup) showSetup(); else hideSetup();
   $("#model").textContent = `${st.model} / effort=${st.effort}` + (st.update && st.update.available && !st.update.applied ? "｜新しい版あり（次回起動時に自動更新）" : "");
+  updateUsageHeader(st.usage_month);
   state.sources = st.sources;
   const box = $("#sources"); box.innerHTML = "";
   for (const name of SOURCE_ORDER) {
@@ -259,6 +283,41 @@ async function startAutoconf(site) {
   }, 4000);
 }
 function setStatus(t) { $("#statusLine").textContent = t; }
+
+// --- API 利用料（月額・概算） ---
+const usd = (x) => `$${(x || 0).toFixed(2)}`;
+const jpy = (x) => `${Math.round(x || 0).toLocaleString()} 円`;
+function updateUsageHeader(u) {
+  const b = $("#usageBtn"); if (!u) return;
+  b.textContent = `今月 約 ${usd(u.cost_usd)}（約 ${jpy(u.cost_jpy)}）` + (u.over_budget ? " ⚠ 予算超過" : "");
+  b.classList.toggle("over", !!u.over_budget);
+}
+async function refreshUsage() {
+  try { const j = await (await fetch("/api/usage?months=1")).json(); updateUsageHeader({ cost_usd: j.this_month.cost_usd, cost_jpy: j.this_month.cost_usd * j.usd_jpy, over_budget: !!(j.monthly_budget_usd && j.this_month.cost_usd > j.monthly_budget_usd) }); } catch (e) {}
+}
+async function openUsage() {
+  $("#usageOverlay").hidden = false; $("#usageBody").innerHTML = '<div class="hint">読み込み中…</div>';
+  try {
+    const j = await (await fetch("/api/usage?months=24")).json();
+    const n = (x) => (x || 0).toLocaleString();
+    const cur = j.this_month; const rate = j.usd_jpy;
+    let html = `<div class="big">${cur.month}: 約 ${usd(cur.cost_usd)}<small>約 ${jpy(cur.cost_usd * rate)} ・ ${n(cur.calls)} 回の API 呼び出し</small></div>`;
+    if (j.monthly_budget_usd) html += `<div class="${cur.cost_usd > j.monthly_budget_usd ? "err" : "hint"}">月額予算 ${usd(j.monthly_budget_usd)}（${cur.cost_usd > j.monthly_budget_usd ? "超過しています" : `残り約 ${usd(j.monthly_budget_usd - cur.cost_usd)}`}）</div>`;
+    const models = Object.entries(cur.by_model || {});
+    if (models.length > 1) html += `<div class="hint" style="margin-top:6px">今月のモデル別: ` + models.map(([m, v]) => `${esc(m)} ${usd(v.cost_usd)}（${n(v.calls)} 回）`).join("、") + `</div>`;
+    html += `<table><thead><tr><th>月</th><th>回数</th><th>入力トークン</th><th>うちキャッシュ読み</th><th>出力トークン</th><th>概算 USD</th><th>概算 JPY</th></tr></thead><tbody>`;
+    for (const m of j.months) {
+      html += `<tr class="${m.month === cur.month ? "cur" : ""}"><td>${esc(m.month)}</td><td>${n(m.calls)}</td><td>${n(m.input + m.cache_write + m.cache_read)}</td><td>${n(m.cache_read)}</td><td>${n(m.output)}</td><td>${usd(m.cost_usd)}</td><td>${jpy(m.cost_usd * rate)}</td></tr>`;
+    }
+    html += `</tbody></table>`;
+    html += `<div class="note">${esc(j.note)}<br>正式な請求額: <a href="${esc(j.console_url)}" target="_blank" rel="noopener">Anthropic Console の Cost ページ</a>を開く（Anthropic アカウントでのログインが必要）。<br>換算: 1 USD = ${rate} 円（.env の LEGAL_AGENT_USD_JPY で変更）。月額予算の警告は LEGAL_AGENT_MONTHLY_BUDGET_USD で設定できます。単価の分からないモデルの呼び出し${cur.unpriced_calls ? `（今月 ${cur.unpriced_calls} 回）` : ""}は 0 として扱います。</div>`;
+    $("#usageBody").innerHTML = html;
+  } catch (e) { $("#usageBody").innerHTML = `<div class="err">利用料を取得できませんでした: ${esc(e.message)}</div>`; }
+}
+$("#usageBtn").onclick = openUsage;
+$("#usageClose").onclick = () => { $("#usageOverlay").hidden = true; };
+$("#usageOverlay").addEventListener("click", e => { if (e.target === $("#usageOverlay")) $("#usageOverlay").hidden = true; });
+document.addEventListener("keydown", e => { if (e.key === "Escape") $("#usageOverlay").hidden = true; });
 function usageText(u) {
   if (!u) return "";
   const n = (x) => (x || 0).toLocaleString();
@@ -355,7 +414,7 @@ $("#form").onsubmit = async (e) => {
           case "memo_saved": setStatus(`メモを保存しました: ${ev.path}`); break;
           case "usage": setStatus("調査中… " + usageText(ev)); break;
           case "done": out.innerHTML = md(ev.text); renderCites(ev.citations); state.sessionId = ev.session_id;
-            setStatus("完了 " + usageText(ev.usage) + (ev.session_usage && ev.session_usage.cost_usd != null ? `｜このセッション累計 約 $${ev.session_usage.cost_usd.toFixed(2)}` : "")); break;
+            setStatus("完了 " + usageText(ev.usage) + (ev.session_usage && ev.session_usage.cost_usd != null ? `｜このセッション累計 約 $${ev.session_usage.cost_usd.toFixed(2)}` : "")); refreshUsage(); break;
           case "error": out.innerHTML += `<p class="err">エラー: ${esc(ev.message)}</p>`; setStatus("エラー"); break;
         }
       }

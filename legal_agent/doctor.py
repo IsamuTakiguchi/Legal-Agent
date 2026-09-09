@@ -95,6 +95,13 @@ def _run(after_install: bool, out) -> int:
         out(f"索引: {st['documents']} 冊 / {st['pages']} ページ  ({s.db_path})")
     except Exception as e:  # noqa: BLE001
         out(f"索引: 読めません（{e}）")
+    try:
+        from .agent.usage_ledger import UsageLedger, month_view
+
+        mv = month_view(UsageLedger(s.usage_db_path), s.usd_jpy, s.monthly_budget_usd)
+        out(f"今月の API 利用料（概算）: 約 ${mv['cost_usd']:.2f}（約 {mv['cost_jpy']:,} 円、{mv['calls']} 回）" + ("  ※予算超過" if mv["over_budget"] else ""))
+    except Exception as e:  # noqa: BLE001
+        out(f"API 利用料: 読めません（{e}）")
 
     # サーバー稼働確認
     running = False

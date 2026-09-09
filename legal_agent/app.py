@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from .agent.runner import AgentRunner
 from .agent.sessions import SessionStore
+from .agent.usage_ledger import CONSOLE_COST_URL, NOTE as USAGE_NOTE, month_view
 from .config import Settings, get_settings
 from .index.indexer import index_dirs
 from . import onedrive
@@ -100,6 +101,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        try:
+            # 台帳導入前のセッションの利用量を 1 回だけ取り込む（過去の月額も出せるように）
+            n = await asyncio.to_thread(runner.ledger.backfill_from_sessions, store, settings.model)
+            if n:
+                log.info("過去のセッションから利用記録 %d 件を取り込みました", n)
+        except Exception as e:  # noqa: BLE001
+            log.warning("利用記録の取り込みに失敗: %s", e)
         if settings.auto_index:
             bg_tasks.append(asyncio.create_task(auto_index_loop()))
         if settings.auto_login:
@@ -135,6 +143,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "pdf_dirs_status": await asyncio.to_thread(lambda: [describe_dir(p) for p in settings.pdf_dirs]),
             "auto_configure": settings.auto_configure,
             "update": bg["update"],
+            "usage_month": month_view(runner.ledger, settings.usd_jpy, settings.monthly_budget_usd),
             "limits": {
                 "max_searches_per_source": settings.max_searches_per_source,
                 "max_fetches_per_run": settings.max_fetches_per_run,
@@ -193,6 +202,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     yield _sse(ev)
 
         return StreamingResponse(gen(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+    @app.get("/api/usage")
+    async def usage(months: int = 12) -> dict[str, Any]:
+        """月ごとの API 利用料（概算）。"""
+        ms = runner.ledger.months(limit=max(1, min(months, 60)))
+        return {
+            "month": ms[0]["month"],
+            "this_month": ms[0],
+            "months": ms,
+            "usd_jpy": settings.usd_jpy,
+            "monthly_budget_usd": settings.monthly_budget_usd,
+            "console_url": CONSOLE_COST_URL,
+            "note": USAGE_NOTE,
+        }
 
     @app.get("/api/sessions")
     async def sessions() -> list[dict[str, Any]]:
@@ -263,7 +286,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if t and not t.done():
             return {"started": False, "message": "自動設定を実行中です。"}
         src = registry.get(site)
-        autoconf_tasks[site] = asyncio.create_task(src.autoconfigure(req.query))
+        autoconf_tasks[site] = asyncio.create_task(src.autoconfigure(req.query, ledger=runner.ledger))
         return {"started": True, "message": "Claude が画面構造を解析しています（1〜3 分）。"}
 
     @app.get("/api/autoconf/{site}")

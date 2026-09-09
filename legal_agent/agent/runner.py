@@ -18,6 +18,7 @@ from .costs import UsageTotals, compact_history, strip_private_keys
 from .prompts import SYSTEM_PROMPT
 from .sessions import ChatSession, SessionStore
 from .tools import TOOLS
+from .usage_ledger import UsageLedger
 
 log = logging.getLogger(__name__)
 
@@ -48,10 +49,11 @@ def serialize_content(content: list[Any]) -> list[dict[str, Any]]:
 
 
 class AgentRunner:
-    def __init__(self, settings: Settings, registry: SourceRegistry, store: SessionStore, client: anthropic.AsyncAnthropic | None = None):
+    def __init__(self, settings: Settings, registry: SourceRegistry, store: SessionStore, client: anthropic.AsyncAnthropic | None = None, ledger: UsageLedger | None = None):
         self.settings = settings
         self.registry = registry
         self.store = store
+        self.ledger = ledger or UsageLedger(settings.usage_db_path)
         self._client = client  # 遅延生成: セットアップ完了後に API キーが入ってから作れるようにする
 
     @property
@@ -154,6 +156,11 @@ class AgentRunner:
                 msg = await stream.get_final_message()
                 last_message = msg
                 totals.add(getattr(msg, "usage", None))
+                try:
+                    # フォールバックで別モデルが応答した場合も、実際に応答したモデルの単価で記録する
+                    self.ledger.record(getattr(msg, "usage", None), model=getattr(msg, "model", None) or self.settings.model, kind="chat", session_id=session.id)
+                except Exception as e:  # noqa: BLE001
+                    log.warning("利用記録に失敗: %s", e)
                 ctx.emit({"type": "usage", **totals.to_dict(self.settings.model)})
                 messages.append({"role": "assistant", "content": serialize_content(msg.content)})
                 if msg.stop_reason == "tool_use":

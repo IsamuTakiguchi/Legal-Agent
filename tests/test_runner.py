@@ -120,6 +120,9 @@ async def test_runner_end_to_end(settings, tmp_path):
     assert done["usage"]["input"] == 10 and done["usage"]["output"] == 5 and done["usage"]["turns"] == 1
     assert done["session_usage"]["output"] == 5 and session.usage["output"] == 5
     assert "usage" in types
+    # 台帳: usage のあった 2 ターン目だけ記録され、月集計に反映される
+    ms = runner.ledger.month_summary()
+    assert ms["calls"] == 1 and ms["input"] == 10 and ms["output"] == 5 and ms["by_model"]["claude-opus-5"]["calls"] == 1
     # 2 問目: 前の質問のツール結果は圧縮されてから送られ、セッションに残る履歴も圧縮済み
     client2, calls2 = make_client()
     runner2 = AgentRunner(settings, StubRegistry(settings), store, client=client2)

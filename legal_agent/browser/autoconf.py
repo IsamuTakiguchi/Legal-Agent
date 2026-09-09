@@ -73,12 +73,13 @@ def _trim(summary: dict[str, Any]) -> str:
 
 
 class AutoConfigurator:
-    def __init__(self, source, client: anthropic.AsyncAnthropic | None = None, model: str = "claude-opus-5"):
+    def __init__(self, source, client: anthropic.AsyncAnthropic | None = None, model: str = "claude-opus-5", ledger=None):
         self.source = source  # BrowserSiteSource
         self.browser = source.browser
         self.site = source.name
         self.model = model
         self.client = client or anthropic.AsyncAnthropic()
+        self.ledger = ledger  # UsageLedger（利用料の記録。無ければ記録しない）
         self.log: list[str] = []
 
     # ---- ユーティリティ ----
@@ -98,6 +99,11 @@ class AutoConfigurator:
             messages=[{"role": "user", "content": content}],
             output_format=model_cls,
         )
+        if self.ledger is not None:
+            try:
+                self.ledger.record(getattr(resp, "usage", None), model=getattr(resp, "model", None) or self.model, kind="autoconf", session_id=self.site)
+            except Exception as e:  # noqa: BLE001
+                log.warning("利用記録に失敗: %s", e)
         return resp.parsed_output
 
     # ---- 本体 ----

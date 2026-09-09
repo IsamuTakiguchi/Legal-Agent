@@ -193,13 +193,13 @@ class BrowserSiteSource:
             log.warning("%s: セレクタ自動発見に失敗: %s", self.name, e)
             return False
 
-    async def autoconfigure(self, query: str = "解雇", client=None) -> dict[str, Any]:
+    async def autoconfigure(self, query: str = "解雇", client=None, ledger=None) -> dict[str, Any]:
         """Claude で画面構造を解析してセレクタを発見し、override に保存して設定を再読込する。"""
         from ..browser.autoconf import AutoConfigurator, save_override
 
         async with self._autoconf_lock:
             self.autoconf_state.update({"running": True, "last_result": None})
-            ac = AutoConfigurator(self, client=client, model=self.settings.autoconf_model)
+            ac = AutoConfigurator(self, client=client, model=self.settings.autoconf_model, ledger=ledger)
             try:
                 new_cfg = await ac.run(query)
                 save_override(self.settings.selectors_override_path, self.name, new_cfg)
