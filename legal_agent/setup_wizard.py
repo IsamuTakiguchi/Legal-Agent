@@ -144,7 +144,7 @@ def choose_pdf_dirs(current: str = "", ask=_ask, out=print) -> str:
         if not info["exists"]:
             out(f"  注意: {p} が見つかりません（OneDrive にサインインしているか確認してください）")
         else:
-            note = f"、うちクラウドのみ {info['cloud_only']} 件（索引時に順次ダウンロードされます）" if info["cloud_only"] else ""
+            note = f"、うちクラウドのみ {info['cloud_only']} 件（許可した PDF だけ索引時にダウンロードします）" if info["cloud_only"] else ""
             out(f"  {p}: PDF {info['pdfs']} 件{note}")
     return ",".join(str(p) for p in chosen)
 

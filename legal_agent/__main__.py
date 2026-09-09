@@ -87,8 +87,15 @@ def cmd_index(args: argparse.Namespace) -> None:
     dirs = [Path(p) for p in args.paths] or s.pdf_dirs
     if not dirs:
         sys.exit("PDF フォルダを引数か LEGAL_AGENT_PDF_DIRS で指定してください")
+    from .index.approvals import DownloadApprovals
+
     db = IndexDB(s.db_path)
-    stats = index_dirs(db, dirs, rebuild=args.rebuild)
+    approvals = DownloadApprovals(s.download_approvals_path)
+    if args.allow_all:
+        approvals.set_allow_all(True)
+    stats = index_dirs(db, dirs, rebuild=args.rebuild, approvals=approvals, download_cloud=s.auto_download_cloud_pdfs)
+    for f in stats.pop("pending_files", []):
+        print(f"許可待ち（クラウドのみ）: {f['path']}")
     print(stats)
 
 
@@ -178,6 +185,7 @@ def main(argv: list[str] | None = None) -> None:
     p = sub.add_parser("index", help="書籍 PDF を索引化")
     p.add_argument("paths", nargs="*")
     p.add_argument("--rebuild", action="store_true")
+    p.add_argument("--allow-all", action="store_true", help="クラウドのみの PDF をすべてダウンロード許可する")
     p.set_defaults(fn=cmd_index)
     p = sub.add_parser("login", help="TKC / LEGAL LIBRARY に手動ログイン")
     p.add_argument("site", choices=["tkc", "legal_library"])

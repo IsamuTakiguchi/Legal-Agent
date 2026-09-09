@@ -104,6 +104,18 @@
   <button type="button" class="usage" id="usageBtn" title="今月の API 利用料（概算）。クリックで月別の明細">今月 —</button>
   <div class="sources" id="sources"></div>
 </header>
+<div class="overlay" id="dlOverlay" hidden>
+  <div class="panel" role="dialog" aria-labelledby="dlTitle">
+    <h2 id="dlTitle">クラウドのみの PDF をダウンロードする許可<button type="button" id="dlClose">閉じる</button></h2>
+    <div class="hint">OneDrive の「ファイル オンデマンド」でこの PC にまだ無い PDF です。索引を作るには実ファイルが必要なため、許可したものだけ OneDrive からダウンロードして索引します（許可は記憶され、次回以降は聞きません）。</div>
+    <div id="dlBody" style="margin-top:10px"><div class="hint">読み込み中…</div></div>
+    <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button type="button" id="dlAllow" class="new" style="width:auto;padding:8px 16px;border-radius:8px;border:none;background:var(--accent);color:var(--accent-ink);font-weight:600;cursor:pointer">選択した PDF をダウンロードして索引</button>
+      <label style="font-size:12px;display:flex;gap:6px;align-items:center"><input type="checkbox" id="dlAll">以後、このフォルダの PDF はすべて自動で許可する</label>
+      <span id="dlMsg" class="hint"></span>
+    </div>
+  </div>
+</div>
 <div class="overlay" id="usageOverlay" hidden>
   <div class="panel" role="dialog" aria-labelledby="usageTitle">
     <h2 id="usageTitle">API 利用料（概算）<button type="button" id="usageClose">閉じる</button></h2>
@@ -132,7 +144,7 @@
           <span>書籍 PDF のフォルダ</span>
           <div id="setupFolders" class="folders"><div class="hint">OneDrive の同期フォルダを探しています…</div></div>
           <input id="setupManual" type="text" placeholder="一覧に無い場合はフォルダのパスを貼り付け（任意）">
-          <small>チェックしたフォルダ内の PDF を全文索引します（クラウドのみの PDF は順次ダウンロードされます）。後から「索引を更新」で再スキャンできます。</small>
+          <small>チェックしたフォルダ内の PDF を全文索引します（OneDrive でクラウドのみになっている PDF は、あなたが許可したものだけダウンロードします）。後から「索引を更新」で再スキャンできます。</small>
         </div>
         <div class="f">
           <button id="setupSave" type="submit">保存して開始</button>
@@ -261,9 +273,11 @@ async function loadStatus() {
   for (const d of (st.pdf_dirs_status || [])) {
     const name = d.path.split(/[\\/]/).filter(Boolean).pop() || d.path;
     if (!d.exists) idx += `<div class="err">「${esc(name)}」が見つかりません（OneDrive にサインインしているか確認）</div>`;
-    else if (d.cloud_only > 0) idx += `<div>「${esc(name)}」: 未ダウンロード ${d.cloud_only} 冊（索引時に取得）</div>`;
+    else if (d.cloud_only > 0) idx += `<div>「${esc(name)}」: クラウドのみ ${d.cloud_only} 冊</div>`;
   }
+  if (st.pending_downloads > 0) idx += `<div class="err" style="margin-top:4px">ダウンロード許可待ち ${st.pending_downloads} 冊 <button type="button" id="dlBtn" style="font-size:11px">許可する…</button></div>`;
   $("#indexInfo").innerHTML = idx;
+  const dlBtn = $("#dlBtn"); if (dlBtn) dlBtn.onclick = openDownloads;
   if (st.indexing) setTimeout(loadStatus, 5000);
 }
 async function startLogin(site, manual) {
@@ -315,9 +329,37 @@ async function openUsage() {
   } catch (e) { $("#usageBody").innerHTML = `<div class="err">利用料を取得できませんでした: ${esc(e.message)}</div>`; }
 }
 $("#usageBtn").onclick = openUsage;
+
+// --- クラウドのみ PDF のダウンロード許可 ---
+async function openDownloads() {
+  $("#dlOverlay").hidden = false; $("#dlMsg").textContent = ""; $("#dlBody").innerHTML = '<div class="hint">読み込み中…</div>';
+  try {
+    const j = await (await fetch("/api/downloads")).json();
+    if (!j.pending.length) { $("#dlBody").innerHTML = '<div class="hint">許可待ちの PDF はありません。</div>'; return; }
+    const box = document.createElement("div"); box.className = "folders"; box.style.maxHeight = "50vh";
+    box.innerHTML = `<label><input type="checkbox" id="dlCheckAll" checked><strong>すべて選択（${j.pending.length} 冊）</strong></label>` +
+      j.pending.map(f => `<label><input type="checkbox" class="dlItem" value="${esc(f.path)}" checked><span title="${esc(f.path)}">${esc(f.name)}</span><span class="n">${esc(f.folder)} ・ ${f.size_mb} MB</span></label>`).join("");
+    $("#dlBody").innerHTML = ""; $("#dlBody").appendChild(box);
+    $("#dlCheckAll").onchange = e => box.querySelectorAll(".dlItem").forEach(i => { i.checked = e.target.checked; });
+  } catch (e) { $("#dlBody").innerHTML = `<div class="err">一覧を取得できませんでした: ${esc(e.message)}</div>`; }
+}
+$("#dlAllow").onclick = async () => {
+  const paths = [...document.querySelectorAll("#dlBody .dlItem:checked")].map(i => i.value);
+  const all = $("#dlAll").checked;
+  if (!paths.length && !all) { $("#dlMsg").textContent = "PDF を選んでください。"; return; }
+  $("#dlAllow").disabled = true;
+  try {
+    const j = await (await fetch("/api/downloads/allow", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ paths, all }) })).json();
+    $("#dlMsg").textContent = `${j.allowed} 冊を許可しました${all ? "（以後は自動で許可）" : ""}。` + (j.indexing ? "バックグラウンドでダウンロードと索引作成を始めます。" : "「索引を更新」を押すとダウンロードと索引作成を行います。");
+    setTimeout(() => { $("#dlOverlay").hidden = true; loadStatus(); }, 1500);
+  } catch (e) { $("#dlMsg").textContent = "通信エラー: " + e.message; }
+  finally { $("#dlAllow").disabled = false; }
+};
+$("#dlClose").onclick = () => { $("#dlOverlay").hidden = true; };
+$("#dlOverlay").addEventListener("click", e => { if (e.target === $("#dlOverlay")) $("#dlOverlay").hidden = true; });
 $("#usageClose").onclick = () => { $("#usageOverlay").hidden = true; };
 $("#usageOverlay").addEventListener("click", e => { if (e.target === $("#usageOverlay")) $("#usageOverlay").hidden = true; });
-document.addEventListener("keydown", e => { if (e.key === "Escape") $("#usageOverlay").hidden = true; });
+document.addEventListener("keydown", e => { if (e.key === "Escape") { $("#usageOverlay").hidden = true; $("#dlOverlay").hidden = true; } });
 function usageText(u) {
   if (!u) return "";
   const n = (x) => (x || 0).toLocaleString();

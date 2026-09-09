@@ -32,6 +32,10 @@ def test_status_and_sessions(client):
         assert st["sources"][site]["available"] is False and st["sources"][site]["requires_login"] is False
         assert "保留" in st["sources"][site]["detail"]
     assert st["indexing"] is False and st["auto_configure"] is True
+    assert st["pending_downloads"] == 0 and st["auto_download_cloud_pdfs"] is False
+    assert c.get("/api/downloads").json() == {"pending": [], "allow_all": False, "auto": False}
+    r = c.post("/api/downloads/allow", json={"paths": ["C:/x/a.pdf"], "all": True}).json()
+    assert r["allowed"] == 1 and r["allow_all"] is True and app.state.approvals.is_allowed("C:/x/a.pdf")
     assert st["usage_month"]["cost_usd"] == 0 and st["usage_month"]["over_budget"] is False and st["usage_month"]["calls"] == 0
     u = c.get("/api/usage").json()
     assert u["month"] == st["usage_month"]["month"] and u["months"][0]["calls"] == 0 and u["usd_jpy"] == 150.0

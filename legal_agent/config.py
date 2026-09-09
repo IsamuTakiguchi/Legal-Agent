@@ -51,6 +51,8 @@ class Settings(BaseSettings):
 
     # 起動時の自動処理
     auto_index: bool = True
+    # OneDrive「クラウドのみ」の PDF を索引時に自動ダウンロードするか。既定は許可制（画面で許可した PDF だけ取得）
+    auto_download_cloud_pdfs: bool = False
     auto_login: bool = True
     auto_open_browser: bool = True
     # Claude によるセレクタ自動発見（ログイン後の画面構造を解析して data/selectors.override.yaml に保存）
@@ -96,6 +98,10 @@ class Settings(BaseSettings):
     @property
     def usage_db_path(self) -> Path:
         return self.data_dir / "usage.sqlite3"
+
+    @property
+    def download_approvals_path(self) -> Path:
+        return self.data_dir / "download_approvals.json"
 
     @property
     def sessions_dir(self) -> Path:

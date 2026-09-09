@@ -16,7 +16,8 @@ from .agent.runner import AgentRunner
 from .agent.sessions import SessionStore
 from .agent.usage_ledger import CONSOLE_COST_URL, NOTE as USAGE_NOTE, month_view
 from .config import Settings, get_settings
-from .index.indexer import index_dirs
+from .index.approvals import DownloadApprovals
+from .index.indexer import index_dirs, pending_downloads
 from . import onedrive
 from .onedrive import describe_dir, list_pdf_folders, strip_quotes
 from .setup_wizard import apply_setup, login_sites_enabled, validate_api_key
@@ -40,6 +41,11 @@ class AutoconfRequest(BaseModel):
     query: str = "解雇"
 
 
+class DownloadAllowRequest(BaseModel):
+    paths: list[str] = Field(default_factory=list)
+    all: bool = False
+
+
 class SetupRequest(BaseModel):
     api_key: str | None = None
     pdf_dirs: list[str] = Field(default_factory=list)
@@ -51,6 +57,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     registry = SourceRegistry(settings)
     store = SessionStore(settings.sessions_dir)
     runner = AgentRunner(settings, registry, store)
+    approvals = DownloadApprovals(settings.download_approvals_path)
+
+    def _index(rebuild: bool = False) -> dict[str, Any]:
+        return index_dirs(registry.local.db, settings.pdf_dirs, rebuild, log.info, approvals=approvals, download_cloud=settings.auto_download_cloud_pdfs)
+
+    def _pending() -> list[dict[str, Any]]:
+        return pending_downloads(settings.pdf_dirs, approvals, settings.auto_download_cloud_pdfs)
     login_tasks: dict[str, asyncio.Task] = {}
     autoconf_tasks: dict[str, asyncio.Task] = {}
     chat_lock = asyncio.Lock()
@@ -63,7 +76,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if settings.pdf_dirs:
                 bg["indexing"] = True
                 try:
-                    bg["index_result"] = await asyncio.to_thread(index_dirs, registry.local.db, settings.pdf_dirs, False, log.info)
+                    bg["index_result"] = await asyncio.to_thread(_index)
                 except Exception as e:  # noqa: BLE001
                     bg["index_result"] = {"error": str(e)}
                 finally:
@@ -123,6 +136,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.registry = registry
     app.state.store = store
+    app.state.approvals = approvals
     app.state.runner = runner
 
     @app.get("/", response_class=HTMLResponse)
@@ -141,6 +155,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "index_result": bg["index_result"],
             "pdf_dirs": [str(p) for p in settings.pdf_dirs],
             "pdf_dirs_status": await asyncio.to_thread(lambda: [describe_dir(p) for p in settings.pdf_dirs]),
+            "pending_downloads": len(await asyncio.to_thread(_pending)),
+            "auto_download_cloud_pdfs": settings.auto_download_cloud_pdfs,
             "auto_configure": settings.auto_configure,
             "update": bg["update"],
             "usage_month": month_view(runner.ledger, settings.usd_jpy, settings.monthly_budget_usd),
@@ -314,9 +330,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(400, "LEGAL_AGENT_PDF_DIRS が設定されていません")
         bg["indexing"] = True
         try:
-            return await asyncio.to_thread(index_dirs, registry.local.db, settings.pdf_dirs, rebuild, log.info)
+            return await asyncio.to_thread(_index, rebuild)
         finally:
             bg["indexing"] = False
+
+    # ---- クラウドのみ PDF のダウンロード許可 ----
+    @app.get("/api/downloads")
+    async def downloads() -> dict[str, Any]:
+        return {"pending": await asyncio.to_thread(_pending), "allow_all": approvals.allow_all, "auto": settings.auto_download_cloud_pdfs}
+
+    @app.post("/api/downloads/allow")
+    async def downloads_allow(req: DownloadAllowRequest) -> dict[str, Any]:
+        n = approvals.allow(req.paths) if req.paths else 0
+        if req.all:
+            approvals.set_allow_all(True)
+        if (n or req.all) and settings.pdf_dirs:
+            index_wake.set()  # 許可した PDF をすぐ取得・索引する
+        return {"allowed": n, "allow_all": approvals.allow_all, "indexing": bool(settings.pdf_dirs and settings.auto_index)}
 
     @app.get("/pdf/{doc_id}")
     async def pdf(doc_id: str) -> FileResponse:
