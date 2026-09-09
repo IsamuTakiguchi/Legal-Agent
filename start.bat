@@ -1,7 +1,17 @@
 @echo off
 rem Legal-Agent launcher (Windows). Also used by the desktop shortcut.
-rem Server log: data\server.log
+rem The app lives in %LOCALAPPDATA%\Legal-Agent. Server log: data\server.log there.
 setlocal
+set "HOME_DIR=%LOCALAPPDATA%\Legal-Agent"
+if /I not "%~dp0"=="%HOME_DIR%\" (
+    if exist "%HOME_DIR%\start.bat" (
+        call "%HOME_DIR%\start.bat"
+        exit /b
+    )
+    echo Not installed yet. Running install.bat ...
+    call "%~dp0install.bat"
+    exit /b
+)
 cd /d "%~dp0"
 if not exist "data" mkdir "data"
 echo start.bat %date% %time% > "data\last_start.txt"

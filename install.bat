@@ -1,9 +1,23 @@
 @echo off
 rem Legal-Agent installer (Windows). Double-click to run.
-rem Everything is installed INSIDE this folder (.venv, .env, data). Nothing goes to Program Files.
-rem Log: install.log in this folder. A status report opens in Notepad at the end.
+rem The app is installed to %LOCALAPPDATA%\Legal-Agent (outside OneDrive; short ASCII path).
+rem Log: install.log in that folder. A status report opens in Notepad at the end.
 setlocal
+set "HOME_DIR=%LOCALAPPDATA%\Legal-Agent"
 cd /d "%~dp0"
+if /I not "%~dp0"=="%HOME_DIR%\" (
+    echo Copying the app to %HOME_DIR% ...
+    echo (OneDrive folders and long Japanese paths break the Python environment, so the app lives there.)
+    if not exist "%HOME_DIR%" mkdir "%HOME_DIR%"
+    robocopy "%~dp0." "%HOME_DIR%" /E /XD .venv data .git __pycache__ .pytest_cache /XF install.log .update.json /NFL /NDL /NJH /NJS /NP >nul
+    if not exist "%HOME_DIR%\install.bat" (
+        echo [ERROR] Could not copy the app to %HOME_DIR%
+        pause
+        exit /b 1
+    )
+    call "%HOME_DIR%\install.bat"
+    exit /b
+)
 set "LOG=%~dp0install.log"
 set "PYTHONUTF8=1"
 echo ==== Legal-Agent install %date% %time% ==== >> "%LOG%"
@@ -41,6 +55,12 @@ if not defined PY (
 echo [1/4] Python: %PY%
 echo [1/4] Python: %PY% >> "%LOG%"
 
+if exist ".venv\Scripts\python.exe" (
+    ".venv\Scripts\python.exe" -c "import sys" >nul 2>&1 || (
+        echo [2/4] Existing .venv is broken. Recreating...
+        rmdir /s /q ".venv"
+    )
+)
 if not exist ".venv\Scripts\python.exe" (
     echo [2/4] Creating virtual environment .venv ...
     %PY% -m venv .venv >> "%LOG%" 2>&1 || (echo [ERROR] venv failed. See install.log & start "" notepad "%LOG%" & pause & exit /b 1)

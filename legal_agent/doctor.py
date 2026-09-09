@@ -39,7 +39,11 @@ def run_doctor(after_install: bool = False, out=print, file: Path | None = None)
         if file is not None:
             try:
                 file.parent.mkdir(parents=True, exist_ok=True)
-                file.write_text("\ufeff" + "\r\n".join(lines) + "\r\n", encoding="utf-8")
+                new = not file.exists() or file.stat().st_size == 0
+                with file.open("a", encoding="utf-8") as f:  # 追記（bat が書いたヘッダーを消さない）
+                    if new:
+                        f.write("\ufeff")
+                    f.write("\r\n".join(lines) + "\r\n")
             except OSError:
                 pass
     return code
@@ -51,7 +55,9 @@ def _run(after_install: bool, out) -> int:
     problems: list[str] = []
     out("=== Legal-Agent 状態確認 ===")
     out(f"インストール先: {ROOT}")
-    out(f"  （このフォルダの中だけにインストールされます。Program Files 等には入りません）")
+    out("  （通常は C:\\Users\\<名前>\\AppData\\Local\\Legal-Agent。Program Files 等には入りません）")
+    if "onedrive" in str(ROOT).lower():
+        problems.append("OneDrive の同期フォルダ内にインストールされています。同期やクラウドのみ化で Python が動かなくなるため、install.bat をもう一度ダブルクリックして AppData\\Local\\Legal-Agent に移してください")
     out(f"Python: {platform.python_version()}  {sys.executable}")
     venv_ok = Path(sys.prefix) == (ROOT / ".venv").resolve() or (ROOT / ".venv").exists()
     out(f"仮想環境 (.venv): {'あり' if venv_ok else 'なし'}")
