@@ -108,7 +108,7 @@ def _run(after_install: bool, out) -> int:
     try:
         import httpx
 
-        r = httpx.get(f"http://{s.host}:{s.port}/api/status", timeout=2)
+        r = httpx.get(f"http://{s.host}:{s.port}/api/status", timeout=10)
         running = r.status_code == 200
     except Exception:  # noqa: BLE001
         running = False
@@ -125,7 +125,8 @@ def _run(after_install: bool, out) -> int:
     log = ROOT / "install.log"
     if log.exists():
         out(f"導入ログ: {log}")
-    slog = s.data_dir / "server.log"
+    slogs = sorted((p for p in (ROOT / "logs").glob("server-*.log") if not p.name.endswith("-out.log")), key=lambda p: p.stat().st_mtime) if (ROOT / "logs").is_dir() else []
+    slog = slogs[-1] if slogs else s.data_dir / "server.log"
     if slog.exists():
         out(f"サーバーログ: {slog}")
         if not running and not after_install:

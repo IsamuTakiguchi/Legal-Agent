@@ -64,10 +64,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     def _pending() -> list[dict[str, Any]]:
         return pending_downloads(settings.pdf_dirs, approvals, settings.auto_download_cloud_pdfs)
+
+    def _refresh_dirs() -> None:
+        """PDF フォルダの走査結果（/api/status 用）。OneDrive の走査は遅いので索引のたびに計算して覚えておく。"""
+        bg["dirs_status"] = [describe_dir(p) for p in settings.pdf_dirs]
+        bg["pending"] = _pending()
     login_tasks: dict[str, asyncio.Task] = {}
     autoconf_tasks: dict[str, asyncio.Task] = {}
     chat_lock = asyncio.Lock()
-    bg: dict[str, Any] = {"indexing": False, "index_result": None, "startup_login": {}, "update": None}
+    bg: dict[str, Any] = {"indexing": False, "index_result": None, "startup_login": {}, "update": None, "dirs_status": None, "pending": None}
     bg_tasks: list[asyncio.Task] = []
     index_wake = asyncio.Event()  # セットアップ完了時などに即時再スキャンさせる
 
@@ -77,6 +82,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 bg["indexing"] = True
                 try:
                     bg["index_result"] = await asyncio.to_thread(_index)
+                    await asyncio.to_thread(_refresh_dirs)
                 except Exception as e:  # noqa: BLE001
                     bg["index_result"] = {"error": str(e)}
                 finally:
@@ -145,6 +151,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/status")
     async def status() -> dict[str, Any]:
+        if bg["dirs_status"] is None:
+            await asyncio.to_thread(_refresh_dirs)
         return {
             "needs_setup": settings.needs_setup,
             "model": settings.model,
@@ -154,8 +162,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "indexing": bg["indexing"],
             "index_result": bg["index_result"],
             "pdf_dirs": [str(p) for p in settings.pdf_dirs],
-            "pdf_dirs_status": await asyncio.to_thread(lambda: [describe_dir(p) for p in settings.pdf_dirs]),
-            "pending_downloads": len(await asyncio.to_thread(_pending)),
+            "pdf_dirs_status": bg["dirs_status"],
+            "pending_downloads": len(bg["pending"] or []),
             "auto_download_cloud_pdfs": settings.auto_download_cloud_pdfs,
             "auto_configure": settings.auto_configure,
             "update": bg["update"],
@@ -330,14 +338,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(400, "LEGAL_AGENT_PDF_DIRS が設定されていません")
         bg["indexing"] = True
         try:
-            return await asyncio.to_thread(_index, rebuild)
+            result = await asyncio.to_thread(_index, rebuild)
+            await asyncio.to_thread(_refresh_dirs)
+            return result
         finally:
             bg["indexing"] = False
 
     # ---- クラウドのみ PDF のダウンロード許可 ----
     @app.get("/api/downloads")
     async def downloads() -> dict[str, Any]:
-        return {"pending": await asyncio.to_thread(_pending), "allow_all": approvals.allow_all, "auto": settings.auto_download_cloud_pdfs}
+        await asyncio.to_thread(_refresh_dirs)
+        return {"pending": bg["pending"], "allow_all": approvals.allow_all, "auto": settings.auto_download_cloud_pdfs}
 
     @app.post("/api/downloads/allow")
     async def downloads_allow(req: DownloadAllowRequest) -> dict[str, Any]:

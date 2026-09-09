@@ -35,10 +35,13 @@ def cmd_update(args: argparse.Namespace) -> None:
         print("自動更新は無効です（LEGAL_AGENT_AUTO_UPDATE=false）。--force で実行できます。")
         return
     st = check_and_update(s.update_repo, s.update_branch, apply=not args.check)
+    # 終了コード: 10 = 更新を適用した（start.ps1 が稼働中のサーバーを再起動する）、2 = 確認失敗、0 = 最新
     if st.error:
         print(f"更新の確認に失敗（そのまま起動します）: {st.error}", file=sys.stderr)
+        sys.exit(2)
     elif st.applied:
         print(st.message)
+        sys.exit(10)
     elif st.available:
         print(f"新しい版があります: {st.latest[:7]}（現在 {st.current[:7] or '不明'}）")
     else:
@@ -161,7 +164,7 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--port", type=int)
     p.add_argument("--no-open", action="store_true")
     p.set_defaults(fn=cmd_serve)
-    p = sub.add_parser("update", help="GitHub の最新版に更新（start.bat が起動前に自動実行）")
+    p = sub.add_parser("update", help="GitHub の最新版に更新（start.bat が起動前に自動実行。終了コード 10 = 更新を適用、2 = 確認失敗）")
     p.add_argument("--check", action="store_true", help="確認だけ行い、更新しない")
     p.add_argument("--force", action="store_true")
     p.set_defaults(fn=cmd_update)

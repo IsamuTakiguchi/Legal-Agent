@@ -64,3 +64,26 @@ def test_chat_stream_with_stubbed_runner(client):
     sid = events[0]["session_id"]
     assert c.get(f"/api/sessions/{sid}").status_code == 200
     assert c.delete(f"/api/sessions/{sid}").json() == {"deleted": True}
+
+
+def test_status_uses_cached_dir_scan(settings, monkeypatch, tmp_path):
+    """/api/status は OneDrive フォルダを毎回走査せず、索引のたびに更新されるキャッシュを返す（start.ps1 の稼働判定が 2 秒で切れないように）。"""
+    from legal_agent import app as app_module
+
+    books = tmp_path / "books"
+    books.mkdir()
+    settings.pdf_dirs = [books]
+    settings.auto_index = False
+    calls = []
+    real = app_module.describe_dir
+    monkeypatch.setattr(app_module, "describe_dir", lambda p: calls.append(p) or real(p))
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    with TestClient(create_app(settings)) as c:
+        st = c.get("/api/status").json()
+        assert st["pdf_dirs_status"][0]["path"] == str(books) and st["pending_downloads"] == 0
+        c.get("/api/status")
+        assert len(calls) == 1  # 2 回目はキャッシュ
+        assert c.post("/api/index", json={}).status_code == 200
+        assert len(calls) == 2  # 索引後に再計算
+        c.get("/api/downloads")
+        assert len(calls) == 3  # 許可画面を開いたときは最新を取り直す

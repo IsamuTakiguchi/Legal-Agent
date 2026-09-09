@@ -49,7 +49,10 @@ if (-not (Test-Py)) {
     }
 } else {
     Set-Location $AppHome
-    & $Py -m legal_agent doctor --file $Report *>> $Report
+    New-Item -ItemType Directory -Force -Path (Join-Path $AppHome "logs") | Out-Null
+    Start-Transcript -Path (Join-Path $AppHome ("logs\check-" + (Get-Date -Format "yyyyMMdd-HHmmss") + ".log")) | Out-Null
+    & $Py -m legal_agent doctor --file $Report
+    Stop-Transcript | Out-Null
 }
 Start-Process notepad.exe $Report
 exit 0
