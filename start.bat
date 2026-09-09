@@ -18,6 +18,7 @@ if %errorlevel%==0 (
     exit /b
 )
 if not exist "data" mkdir "data"
+".venv\Scripts\python.exe" -m legal_agent shortcut --quiet
 echo Checking for updates...
 ".venv\Scripts\python.exe" -m legal_agent update
 echo Starting server (log: data\server.log)...

@@ -54,8 +54,7 @@ echo [3/4] Installing the app and its libraries (first time: a few minutes)...
 echo [3/4] pip install OK >> "%LOG%"
 
 echo [4/4] Creating desktop shortcut "Legal-Agent"...
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$d=[Environment]::GetFolderPath('Desktop'); $s=(New-Object -ComObject WScript.Shell).CreateShortcut(\"$d\Legal-Agent.lnk\"); $s.TargetPath='%~dp0start.bat'; $s.WorkingDirectory='%~dp0'; $s.Description='Start Legal-Agent'; $s.Save()" >> "%LOG%" 2>&1
+".venv\Scripts\python.exe" -m legal_agent shortcut >> "%LOG%" 2>&1
 
 echo.
 ".venv\Scripts\python.exe" -m legal_agent doctor --after-install

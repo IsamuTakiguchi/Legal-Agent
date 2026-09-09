@@ -72,6 +72,10 @@ def run_doctor(after_install: bool = False, out=print) -> int:
     url = f"http://{s.host}:{s.port}/"
     out(f"サーバー: {'起動中 → ' + url if running else '停止中（start.bat またはデスクトップの Legal-Agent で起動）'}")
 
+    from .shortcut import ensure_shortcut
+
+    out(f"デスクトップのショートカット: {ensure_shortcut(out=out)}")
+
     upd = ROOT / ".update.json"
     if upd.exists():
         out(f"自動更新の記録: {upd.name} あり")
