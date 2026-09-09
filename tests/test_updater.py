@@ -128,3 +128,30 @@ def test_git_mode(tmp_path, monkeypatch):
     (clone / "pyproject.toml").write_text("local edit")
     st = updater.check_and_update("o/r", "main", apply=True, root=clone, out=lambda s: None)
     assert st.available and not st.applied and "ローカルに変更" in st.message
+
+
+def test_pip_install_args_embedded(monkeypatch, tmp_path):
+    monkeypatch.setattr(updater.sys, "prefix", str(tmp_path))
+    assert not updater.is_embedded_python()
+    args = updater.pip_install_args(tmp_path / "app")
+    assert "--no-build-isolation" not in args and args[-2:] == ["-e", str(tmp_path / "app")]
+    (tmp_path / "python312._pth").write_text("python312.zip\n.\n..\nimport site\n")
+    assert updater.is_embedded_python()
+    args = updater.pip_install_args(tmp_path / "app", editable=False)
+    assert "--no-build-isolation" in args and "-e" not in args and args[-1] == str(tmp_path / "app")
+
+
+def test_reinstall_falls_back_to_normal_install(monkeypatch, tmp_path):
+    calls = []
+
+    class R:
+        def __init__(self, rc):
+            self.returncode = rc
+
+    def fake_run(cmd, check=False):
+        calls.append(cmd)
+        return R(1 if "-e" in cmd else 0)
+
+    monkeypatch.setattr(updater.subprocess, "run", fake_run)
+    updater._reinstall(tmp_path, out=lambda s: None)
+    assert len(calls) == 2 and "-e" in calls[0] and "-e" not in calls[1]

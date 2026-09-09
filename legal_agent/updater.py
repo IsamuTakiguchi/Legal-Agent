@@ -93,9 +93,27 @@ def remote_commit(repo: str, branch: str, client: httpx.Client | None = None) ->
             client.close()
 
 
+def is_embedded_python() -> bool:
+    """同梱（embeddable）Python か。python3xx._pth があれば PYTHONPATH を無視するので build isolation が使えない。"""
+    return any(Path(sys.prefix).glob("python*._pth"))
+
+
+def pip_install_args(root: Path = ROOT, editable: bool = True) -> list[str]:
+    args = [sys.executable, "-m", "pip", "install", "--disable-pip-version-check", "-q", "--no-warn-script-location"]
+    if is_embedded_python():
+        args.append("--no-build-isolation")
+    if editable:
+        args.append("-e")
+    args.append(str(root))
+    return args
+
+
 def _reinstall(root: Path = ROOT, out=print) -> None:
     out("依存関係を更新しています…")
-    subprocess.run([sys.executable, "-m", "pip", "install", "--disable-pip-version-check", "-q", "-e", str(root)], check=False)
+    r = subprocess.run(pip_install_args(root, editable=True), check=False)
+    if r.returncode != 0:
+        # 同梱 Python では ._pth でアプリのフォルダが sys.path に入っているため、通常インストールでも動く
+        subprocess.run(pip_install_args(root, editable=False), check=False)
 
 
 def apply_zip(repo: str, sha: str, root: Path = ROOT, client: httpx.Client | None = None, out=print) -> int:

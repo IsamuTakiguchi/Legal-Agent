@@ -26,6 +26,14 @@ function Invoke-Home([string]$script) {
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $AppHome $script)
     exit $LASTEXITCODE
 }
+function Set-PthFile {
+    # python3xx._pth: enable "import site" and add ".." (= the app folder) to sys.path
+    $pth = Get-ChildItem -Path (Join-Path $AppHome "python") -Filter "python*._pth" | Select-Object -First 1
+    if (-not $pth) { throw "python*._pth が見つかりません" }
+    $lines = @(Get-Content $pth.FullName | ForEach-Object { if ($_ -match "^#\s*import site") { "import site" } else { $_ } })
+    $lines = @($lines | Where-Object { $_ -ne ".." -and $_ -ne "import site" }) + @("..", "import site")
+    Set-Content -Path $pth.FullName -Value $lines -Encoding Ascii
+}
 
 # ---- 1. relocate to AppHome ----
 if ($Here.TrimEnd("\") -ne $AppHome.TrimEnd("\")) {
@@ -63,10 +71,7 @@ try {
         Invoke-WebRequest -UseBasicParsing -Uri "https://www.python.org/ftp/python/$ver/python-$ver-embed-amd64.zip" -OutFile $zip
         if (Test-Path $PyDir) { Remove-Item -Recurse -Force $PyDir }
         Expand-Archive -Path $zip -DestinationPath $PyDir -Force
-        $pth = Get-ChildItem -Path $PyDir -Filter "python*._pth" | Select-Object -First 1
-        $lines = Get-Content $pth.FullName
-        $lines = $lines | ForEach-Object { if ($_ -match "^#\s*import site") { "import site" } else { $_ } }
-        Set-Content -Path $pth.FullName -Value $lines -Encoding Ascii
+        Set-PthFile
         Write-Host "[1/4] Installing pip ..."
         $getpip = Join-Path $PyDir "get-pip.py"
         Invoke-WebRequest -UseBasicParsing -Uri "https://bootstrap.pypa.io/get-pip.py" -OutFile $getpip
@@ -75,11 +80,20 @@ try {
         if (-not (Test-Py)) { throw "Python を起動できません: $Py" }
         Write-Host "[1/4] Python ready: $Py"
     }
+    # Embedded Python ignores PYTHONPATH, so pip's isolated build environments cannot see
+    # setuptools. Put the app folder on sys.path via the ._pth file and build without isolation.
+    Set-PthFile
+    & $Py -m pip install --disable-pip-version-check -q --no-warn-script-location setuptools wheel
+    if ($LASTEXITCODE -ne 0) { throw "setuptools のインストールに失敗しました (pip exit $LASTEXITCODE)" }
 
     # ---- 4. app + libraries ----
     Write-Host "[2/4] Installing the app and its libraries (first time: a few minutes) ..."
-    & $Py -m pip install --disable-pip-version-check -q --no-warn-script-location -e $AppHome
-    if ($LASTEXITCODE -ne 0) { throw "ライブラリのインストールに失敗しました (pip exit $LASTEXITCODE)" }
+    & $Py -m pip install --disable-pip-version-check -q --no-warn-script-location --no-build-isolation -e $AppHome
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "[2/4] Editable install failed (pip exit $LASTEXITCODE); trying a normal install ..."
+        & $Py -m pip install --disable-pip-version-check -q --no-warn-script-location --no-build-isolation $AppHome
+        if ($LASTEXITCODE -ne 0) { throw "ライブラリのインストールに失敗しました (pip exit $LASTEXITCODE)" }
+    }
     & $Py -c "import legal_agent, anthropic, fastapi, pymupdf"
     if ($LASTEXITCODE -ne 0) { throw "インストール後の読み込み確認に失敗しました" }
     Write-Host "[2/4] OK"

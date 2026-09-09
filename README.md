@@ -38,6 +38,7 @@ LegalBrain エージェント / Legalscape のような使い勝手を、**自�
 
 ### うまく動かないとき
 
+- 同梱 Python は Python 公式の埋め込み版（embeddable）です。`python\python312._pth` に「アプリのフォルダ（`..`）」と `import site` を書き込んであるため、`legal_agent` はこのフォルダから直接読み込まれます。埋め込み版は環境変数 PYTHONPATH を無視するので、pip は `--no-build-isolation` で実行します（`install.ps1`・自動更新の再インストールとも）。
 - 導入が「Python のダウンロード」で失敗する: ネットワーク（プロキシ・セキュリティソフト）が python.org / pypi.org への接続を止めていないか確認し、`install.bat` をもう一度ダブルクリック。
 - 「ポートが使用中」: 既に起動しています。ブラウザで http://127.0.0.1:8765/ を開くか、`.env` に `LEGAL_AGENT_PORT=8766` を追加。
 - 画面が開かない: `start.bat` の黒いウィンドウを閉じていないか確認し、http://127.0.0.1:8765/ を直接開く。
