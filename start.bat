@@ -1,10 +1,11 @@
 @echo off
 rem Legal-Agent launcher (Windows). Also used by the desktop shortcut.
 rem Server log: data\server.log
-chcp 65001 >nul
-set "PYTHONIOENCODING=utf-8"
-set "PYTHONUTF8=1"
+setlocal
 cd /d "%~dp0"
+if not exist "data" mkdir "data"
+echo start.bat %date% %time% > "data\last_start.txt"
+set "PYTHONUTF8=1"
 if not exist ".venv\Scripts\python.exe" (
     echo Not installed yet. Running install.bat ...
     call "%~dp0install.bat"
@@ -17,10 +18,9 @@ if %errorlevel%==0 (
     start "" http://127.0.0.1:8765/
     exit /b
 )
-if not exist "data" mkdir "data"
-".venv\Scripts\python.exe" -m legal_agent shortcut --quiet
+".venv\Scripts\python.exe" -m legal_agent shortcut --quiet >> "data\server.log" 2>&1
 echo Checking for updates...
-".venv\Scripts\python.exe" -m legal_agent update
+".venv\Scripts\python.exe" -m legal_agent update >> "data\server.log" 2>&1
 echo Starting server (log: data\server.log)...
 start "Legal-Agent server" /min cmd /c "".venv\Scripts\python.exe" -m legal_agent serve --no-open >> "data\server.log" 2>&1"
 set /a TRIES=0
@@ -36,9 +36,8 @@ echo Legal-Agent is running: http://127.0.0.1:8765/
 start "" http://127.0.0.1:8765/
 exit /b 0
 :failed
-echo [ERROR] The server did not start within 40 seconds. Last lines of data\server.log:
-powershell -NoProfile -Command "Get-Content -Path 'data\server.log' -Tail 30"
-echo.
-echo Double-click check.bat for a status report.
+echo [ERROR] The server did not start within 40 seconds. Opening data\server.log ...
+start "" notepad "data\server.log"
+echo Double-click check.bat for a full status report.
 pause
 exit /b 1

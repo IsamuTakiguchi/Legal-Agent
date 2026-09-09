@@ -48,7 +48,9 @@ def cmd_update(args: argparse.Namespace) -> None:
 def cmd_doctor(args: argparse.Namespace) -> None:
     from .doctor import run_doctor
 
-    sys.exit(run_doctor(after_install=args.after_install))
+    from pathlib import Path
+
+    sys.exit(run_doctor(after_install=args.after_install, file=Path(args.file) if args.file else None))
 
 
 def cmd_shortcut(args: argparse.Namespace) -> None:
@@ -146,6 +148,7 @@ def main(argv: list[str] | None = None) -> None:
     p.set_defaults(fn=cmd_update)
     p = sub.add_parser("doctor", help="状態確認（インストール先・設定・索引・サーバー稼働）")
     p.add_argument("--after-install", action="store_true")
+    p.add_argument("--file", help="レポートをこのファイルにも書く（UTF-8、メモ帳で開ける）")
     p.set_defaults(fn=cmd_doctor)
     p = sub.add_parser("shortcut", help="デスクトップに Legal-Agent ショートカットを作成（無ければ）")
     p.add_argument("--quiet", action="store_true")

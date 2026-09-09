@@ -18,8 +18,34 @@ def _tail(path: Path, n: int = 15) -> str:
         return ""
 
 
-def run_doctor(after_install: bool = False, out=print) -> int:
-    """戻り値: 0 = 問題なし、1 = 要対応。"""
+def run_doctor(after_install: bool = False, out=print, file: Path | None = None) -> int:
+    """戻り値: 0 = 問題なし、1 = 要対応。file を渡すと UTF-8（BOM 付き、メモ帳向け）にも書き出す。"""
+    from .config import get_settings
+
+    lines: list[str] = []
+    if file is not None:
+        orig_out = out
+
+        def out(msg: str = "") -> None:  # type: ignore[no-redef]
+            lines.append(str(msg))
+            try:
+                orig_out(msg)
+            except Exception:  # noqa: BLE001 コンソールの文字コードが合わない場合でも続行
+                pass
+
+    try:
+        code = _run(after_install, out)
+    finally:
+        if file is not None:
+            try:
+                file.parent.mkdir(parents=True, exist_ok=True)
+                file.write_text("\ufeff" + "\r\n".join(lines) + "\r\n", encoding="utf-8")
+            except OSError:
+                pass
+    return code
+
+
+def _run(after_install: bool, out) -> int:
     from .config import get_settings
 
     problems: list[str] = []
