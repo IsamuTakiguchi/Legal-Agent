@@ -7,111 +7,276 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%276%27 fill=%27%232f5d8a%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-size=%2718%27 text-anchor=%27middle%27 fill=%27white%27 font-family=%27sans-serif%27%3E法%3C/text%3E%3C/svg%3E">
 <style>
   :root {
-    --bg: #f6f5f1; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6a66; --line: #e2dfd6;
-    --accent: #2f5d8a; --accent-ink: #ffffff; --chip: #eef3f8; --warn: #9a3b1c; --ok: #2c7a4b;
-    --user: #e9eef5; --tool: #f3f1ea; --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+    --bg: #ffffff; --side: #f9f9f9; --ink: #0d0d0d; --muted: #8f8f8f; --line: #e5e5e5;
+    --bubble: #f4f4f4; --hover: #ececec; --btn: #0d0d0d; --btn-ink: #ffffff;
+    --accent: #2f5d8a; --ok: #2c7a4b; --warn: #b3261e; --soft: #f7f7f8;
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+    --font: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif;
   }
   @media (prefers-color-scheme: dark) {
-    :root { --bg: #15171a; --panel: #1e2126; --ink: #ecebe6; --muted: #a09e97; --line: #2e3238;
-      --accent: #7fb0e0; --accent-ink: #0f1a26; --chip: #26313d; --user: #262c35; --tool: #23262b; --ok: #6fc38f; --warn: #e28b6b; }
+    :root { --bg: #212121; --side: #171717; --ink: #ececec; --muted: #9b9b9b; --line: #333333;
+      --bubble: #303030; --hover: #2f2f2f; --btn: #ffffff; --btn-ink: #0d0d0d;
+      --accent: #8ab4e8; --ok: #6fc38f; --warn: #f2836b; --soft: #2a2a2a; }
   }
   * { box-sizing: border-box; }
-  body { margin: 0; font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic", system-ui, sans-serif; background: var(--bg); color: var(--ink); font-size: 14px; height: 100vh; display: grid; grid-template-rows: auto 1fr; }
-  header { display: flex; align-items: center; gap: 12px; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
-  header h1 { font-size: 16px; margin: 0 8px 0 0; }
-  header .model { color: var(--muted); font-size: 12px; }
-  .sources { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
-  .src { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; background: var(--chip); font-size: 12px; }
-  .src input { margin: 0; }
-  .src .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
-  .src .dot.ok { background: var(--ok); } .src .dot.ng { background: var(--warn); }
-  .src button { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--accent); background: transparent; color: var(--accent); cursor: pointer; }
-  main { display: grid; grid-template-columns: 220px 1fr 340px; min-height: 0; }
-  aside, section { min-height: 0; overflow: auto; }
-  aside { border-right: 1px solid var(--line); padding: 10px; background: var(--panel); }
-  aside h2, .cites h2 { font-size: 12px; color: var(--muted); margin: 6px 0; text-transform: uppercase; letter-spacing: .05em; }
-  aside button.new { width: 100%; padding: 6px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); cursor: pointer; margin-bottom: 8px; }
-  .sess { padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .sess:hover, .sess.active { background: var(--chip); }
-  .chat { display: grid; grid-template-rows: 1fr auto; }
-  .log { padding: 16px 20px; overflow: auto; }
-  .msg { max-width: 860px; margin: 0 auto 14px; padding: 10px 14px; border-radius: 10px; line-height: 1.7; }
-  .msg.user { background: var(--user); white-space: pre-wrap; }
-  .msg.assistant { background: var(--panel); border: 1px solid var(--line); }
-  .msg.assistant h1, .msg.assistant h2, .msg.assistant h3 { font-size: 15px; margin: 12px 0 4px; }
-  .msg.assistant p { margin: 6px 0; } .msg.assistant ul, .msg.assistant ol { margin: 4px 0 4px 20px; padding: 0; }
-  .msg.assistant code { font-family: var(--mono); font-size: 12px; background: var(--chip); padding: 1px 4px; border-radius: 3px; }
-  .activity { max-width: 860px; margin: 0 auto 10px; font-size: 12px; color: var(--muted); }
-  .activity details { background: var(--tool); border-radius: 8px; padding: 6px 10px; margin-bottom: 4px; }
-  .activity summary { cursor: pointer; }
-  .activity .hit { padding: 2px 0 2px 12px; }
-  .thinking { max-width: 860px; margin: 0 auto 8px; font-size: 12px; color: var(--muted); white-space: pre-wrap; border-left: 3px solid var(--line); padding-left: 10px; max-height: 120px; overflow: auto; }
-  .cite { display: inline-block; background: var(--chip); color: var(--accent); border-radius: 4px; padding: 0 5px; font-size: 11px; cursor: pointer; text-decoration: none; vertical-align: 1px; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body { margin: 0; font-family: var(--font); background: var(--bg); color: var(--ink); font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+  button { font: inherit; color: inherit; }
+  .app { display: flex; height: 100vh; overflow: hidden; }
+
+  /* ---------- sidebar ---------- */
+  #sidebar { width: 260px; flex: 0 0 260px; background: var(--side); display: flex; flex-direction: column; transition: margin-left .2s ease; }
+  body.sb-closed #sidebar { margin-left: -260px; }
+  .sb-top { display: flex; align-items: center; gap: 4px; padding: 10px 10px 6px; }
+  .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border: none; border-radius: 8px; background: transparent; cursor: pointer; color: var(--ink); }
+  .icon-btn:hover { background: var(--hover); }
+  .new-chat { flex: 1; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: none; border-radius: 10px; background: transparent; cursor: pointer; font-size: 14px; font-weight: 500; text-align: left; }
+  .new-chat:hover { background: var(--hover); }
+  .sb-scroll { flex: 1; overflow-y: auto; padding: 4px 8px 8px; }
+  .sb-group { font-size: 12px; color: var(--muted); padding: 14px 10px 4px; font-weight: 600; }
+  .sess { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+  .sess span { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sess:hover { background: var(--hover); }
+  .sess.active { background: var(--hover); font-weight: 500; }
+  .sess .del { opacity: 0; border: none; background: transparent; cursor: pointer; color: var(--muted); padding: 0 2px; font-size: 14px; border-radius: 6px; }
+  .sess:hover .del { opacity: 1; }
+  .sess .del:hover { color: var(--warn); }
+  .sb-bottom { border-top: 1px solid var(--line); padding: 10px 12px; font-size: 12px; color: var(--muted); }
+  .sb-bottom .row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .sb-bottom button.link { border: none; background: transparent; color: var(--accent); cursor: pointer; font-size: 12px; padding: 0; text-decoration: underline; }
+  .sb-bottom .usage-btn { display: block; width: 100%; text-align: left; border: 1px solid var(--line); border-radius: 10px; background: transparent; cursor: pointer; padding: 7px 10px; font-size: 12.5px; color: var(--ink); }
+  .sb-bottom .usage-btn:hover { background: var(--hover); }
+  .sb-bottom .usage-btn.over { color: var(--warn); border-color: var(--warn); font-weight: 600; }
+
+  /* ---------- main ---------- */
+  main { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; transition: margin-right .22s ease; }
+  .topbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; min-height: 48px; }
+  .topbar .brand { font-size: 15px; font-weight: 600; }
+  .topbar .model { font-size: 12px; color: var(--muted); }
+  #thread { flex: 1; overflow-y: auto; scroll-behavior: smooth; }
+  .wrap { max-width: 768px; margin: 0 auto; padding: 8px 20px 40px; }
+
+  /* empty state: 見出しと入力欄を縦中央にまとめる（上のバーは上端のまま） */
+  body.empty-state #thread { flex: 0 0 auto; overflow: visible; margin-top: auto; }
+  body.empty-state .composer-area { margin-bottom: auto; padding-top: 18px; }
+  .empty { max-width: 768px; margin: 0 auto; padding: 0 20px; text-align: center; }
+  .empty h2 { font-size: 26px; font-weight: 600; margin: 0 0 22px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; text-align: left; }
+  .card { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; cursor: pointer; background: transparent; font-size: 13.5px; line-height: 1.5; }
+  .card:hover { background: var(--hover); }
+  .card b { display: block; font-size: 13px; margin-bottom: 3px; }
+  .card span { color: var(--muted); }
+
+  /* turns */
+  .turn { margin: 22px 0; }
+  .turn.user { display: flex; justify-content: flex-end; }
+  .turn.user .bubble { background: var(--bubble); border-radius: 20px; padding: 10px 18px; max-width: 75%; white-space: pre-wrap; word-break: break-word; }
+  .turn.assistant { display: flex; gap: 14px; align-items: flex-start; }
+  .avatar { flex: 0 0 26px; width: 26px; height: 26px; border-radius: 50%; background: #2f5d8a; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; margin-top: 2px; }
+  .turn.assistant .col { flex: 1; min-width: 0; }
+  .body { line-height: 1.8; word-break: break-word; }
+  .body p { margin: 0 0 14px; }
+  .body h2, .body h3, .body h4, .body h5 { font-weight: 600; margin: 20px 0 8px; line-height: 1.4; }
+  .body h2 { font-size: 20px; } .body h3 { font-size: 17px; } .body h4, .body h5 { font-size: 16px; }
+  .body ul, .body ol { margin: 0 0 14px; padding-left: 24px; }
+  .body li { margin: 4px 0; }
+  .body code { font-family: var(--mono); font-size: .88em; background: var(--soft); padding: 2px 5px; border-radius: 5px; }
+  .body strong { font-weight: 600; }
+  .body > :last-child { margin-bottom: 0; }
+  .caret::after { content: ""; display: inline-block; width: 9px; height: 17px; background: var(--ink); margin-left: 2px; vertical-align: -3px; animation: blink 1s steps(2, start) infinite; }
+  @keyframes blink { to { visibility: hidden; } }
+  .cite { display: inline-block; min-width: 17px; text-align: center; background: var(--bubble); color: var(--ink); border-radius: 5px; padding: 0 5px; font-size: 11.5px; cursor: pointer; text-decoration: none; vertical-align: 1.5px; margin: 0 1px; }
+  .cite:hover { background: var(--accent); color: #fff; }
   .cite.unknown { color: var(--warn); }
-  .compose { border-top: 1px solid var(--line); background: var(--panel); padding: 10px 20px; }
-  .compose form { max-width: 860px; margin: 0 auto; display: flex; gap: 8px; align-items: flex-end; }
-  textarea { flex: 1; min-height: 60px; max-height: 200px; resize: vertical; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; }
-  .compose button { padding: 10px 18px; border-radius: 8px; border: none; background: var(--accent); color: var(--accent-ink); cursor: pointer; font-weight: 600; }
-  .compose button:disabled { opacity: .5; cursor: default; }
-  .cites { border-left: 1px solid var(--line); padding: 10px 12px; background: var(--panel); }
-  .cite-item { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; font-size: 12px; }
-  .cite-item .n { font-weight: 700; color: var(--accent); margin-right: 4px; }
+
+  /* steps / thinking */
+  details.step { border: 1px solid var(--line); border-radius: 12px; padding: 6px 12px; margin-bottom: 10px; font-size: 13px; color: var(--muted); background: var(--soft); }
+  details.step summary { cursor: pointer; list-style: none; padding: 3px 0; }
+  details.step summary::-webkit-details-marker { display: none; }
+  details.step summary::before { content: "▸ "; }
+  details.step[open] summary::before { content: "▾ "; }
+  details.step .tool { padding: 4px 0 4px 14px; border-top: 1px solid var(--line); margin-top: 4px; }
+  details.step .hit { padding: 1px 0 1px 14px; }
+  details.step .think-text { white-space: pre-wrap; max-height: 220px; overflow: auto; padding: 4px 0 6px 14px; }
+  .actions { display: flex; align-items: center; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .actions button { border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 4px 12px; font-size: 12.5px; cursor: pointer; }
+  .actions button:hover { background: var(--hover); }
+  .actions .meta { font-size: 11.5px; color: var(--muted); }
+  .err { color: var(--warn); }
+
+  /* ---------- composer ---------- */
+  .composer-area { padding: 0 20px 10px; }
+  .composer { max-width: 768px; margin: 0 auto; border: 1px solid var(--line); border-radius: 26px; background: var(--bg); padding: 8px 8px 8px 10px; display: flex; align-items: flex-end; gap: 6px; box-shadow: 0 2px 10px rgba(0,0,0,.04); position: relative; }
+  .composer textarea { flex: 1; border: none; outline: none; resize: none; background: transparent; color: var(--ink); font: inherit; line-height: 1.5; padding: 8px 4px; max-height: 200px; min-height: 24px; }
+  .send { flex: 0 0 34px; width: 34px; height: 34px; border-radius: 50%; border: none; background: var(--btn); color: var(--btn-ink); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .send:disabled { opacity: .25; cursor: default; }
+  .plus { flex: 0 0 34px; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .plus:hover { background: var(--hover); }
+  .plus.on { background: var(--hover); }
+  .footnote { max-width: 768px; margin: 6px auto 0; text-align: center; font-size: 11.5px; color: var(--muted); min-height: 16px; padding: 0 4px; }
+
+  /* source popover */
+  .pop { position: absolute; bottom: 52px; left: 0; width: min(420px, 86vw); background: var(--bg); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 8px 30px rgba(0,0,0,.18); padding: 8px; z-index: 15; }
+  .pop[hidden] { display: none; }
+  .pop h3 { font-size: 12px; color: var(--muted); margin: 4px 8px 6px; font-weight: 600; }
+  .src { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 10px; font-size: 13.5px; cursor: pointer; }
+  .src:hover { background: var(--hover); }
+  .src input { margin: 0; }
+  .src .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: 0 0 8px; }
+  .src .dot.ok { background: var(--ok); } .src .dot.ng { background: var(--warn); }
+  .src .lbl { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .src .detail { color: var(--muted); font-size: 11.5px; }
+  .src button { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); background: transparent; cursor: pointer; }
+  .src button:hover { background: var(--bubble); }
+
+  /* ---------- drawer (出典) ---------- */
+  #drawer { position: fixed; top: 0; right: 0; bottom: 0; width: 380px; max-width: 92vw; background: var(--bg); border-left: 1px solid var(--line); transform: translateX(100%); transition: transform .22s ease; z-index: 25; display: flex; flex-direction: column; }
+  #drawer.open { transform: none; box-shadow: -8px 0 30px rgba(0,0,0,.12); }
+  #drawer header { display: flex; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line); font-size: 14px; font-weight: 600; }
+  #drawer header button { margin-left: auto; border: none; background: transparent; cursor: pointer; font-size: 18px; color: var(--muted); }
+  #cites { overflow-y: auto; padding: 12px 14px 30px; }
+  .cite-item { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; font-size: 13px; }
+  .cite-item .n { font-weight: 700; color: var(--accent); margin-right: 5px; }
   .cite-item .t { font-weight: 600; }
-  .cite-item .s { color: var(--muted); }
-  .cite-item .x { margin-top: 4px; color: var(--muted); }
+  .cite-item .s, .cite-item .x { color: var(--muted); margin-top: 3px; font-size: 12px; line-height: 1.6; }
   .cite-item a { color: var(--accent); }
   .cite-item.flash { outline: 2px solid var(--accent); }
-  .err { color: var(--warn); }
-  .hint { color: var(--muted); font-size: 12px; max-width: 860px; margin: 0 auto 10px; }
-  .status-line { font-size: 11px; color: var(--muted); margin-top: 6px; max-width: 860px; margin-left: auto; margin-right: auto; }
-  .setup { max-width: 720px; margin: 24px auto; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 24px; }
-  .setup h2 { font-size: 16px; margin: 0 0 14px; }
-  .setup .f { display: block; margin-bottom: 16px; }
-  .setup .f > span { display: block; font-weight: 600; margin-bottom: 6px; }
-  .setup input[type=password], .setup input[type=text] { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; }
-  .setup small { display: block; color: var(--muted); margin-top: 4px; line-height: 1.5; }
-  .setup small a { color: var(--accent); }
-  .folders { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; margin-bottom: 8px; max-height: 220px; overflow: auto; }
-  .folders label { display: flex; gap: 8px; align-items: center; padding: 4px 0; cursor: pointer; }
-  .folders .n { color: var(--muted); font-size: 12px; margin-left: auto; white-space: nowrap; }
-  .setup button { padding: 9px 18px; border-radius: 8px; border: none; background: var(--accent); color: var(--accent-ink); font-weight: 600; cursor: pointer; }
-  .setup button:disabled { opacity: .5; }
-  .chat.setup-mode .compose, .chat.setup-mode .log { display: none; }
-  .chat.setup-mode { grid-template-rows: 1fr; overflow: auto; }
-  header .usage { font-size: 12px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--chip); color: var(--ink); cursor: pointer; }
-  header .usage.over { color: var(--warn); border-color: var(--warn); font-weight: 600; }
-  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: flex; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow: auto; z-index: 20; }
+
+  /* ---------- modals ---------- */
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: flex-start; justify-content: center; padding: 6vh 16px 16px; overflow: auto; z-index: 30; }
   .overlay[hidden] { display: none; }
-  .panel { background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; padding: 18px 22px; width: min(820px, 100%); }
-  .panel h2 { font-size: 16px; margin: 0 0 4px; display: flex; align-items: center; }
-  .panel h2 button { margin-left: auto; font-size: 12px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--chip); color: var(--ink); cursor: pointer; }
-  .panel .big { font-size: 26px; font-weight: 700; margin: 10px 0 2px; }
+  .panel { background: var(--bg); color: var(--ink); border-radius: 16px; padding: 20px 24px; width: min(820px, 100%); box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+  .panel h2 { font-size: 17px; margin: 0 0 6px; display: flex; align-items: center; }
+  .panel h2 button { margin-left: auto; font-size: 12px; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line); background: transparent; cursor: pointer; }
+  .panel .big { font-size: 26px; font-weight: 700; margin: 12px 0 2px; }
   .panel .big small { font-size: 14px; font-weight: 400; color: var(--muted); margin-left: 8px; }
-  .panel table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 10px; }
-  .panel th, .panel td { padding: 5px 6px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+  .panel table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 12px; }
+  .panel th, .panel td { padding: 6px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
   .panel th:first-child, .panel td:first-child { text-align: left; }
   .panel th { color: var(--muted); font-weight: 600; }
   .panel tr.cur td { font-weight: 600; }
-  .panel .note { color: var(--muted); font-size: 12px; margin-top: 10px; line-height: 1.6; }
-  .panel .note a { color: var(--accent); }
-  @media (max-width: 1000px) { main { grid-template-columns: 1fr; } aside, .cites { display: none; } }
+  .panel .note { color: var(--muted); font-size: 12px; margin-top: 12px; line-height: 1.7; }
+  .panel .note a, .hint a { color: var(--accent); }
+  .hint { color: var(--muted); font-size: 12.5px; line-height: 1.6; }
+  .primary { padding: 9px 18px; border-radius: 10px; border: none; background: var(--btn); color: var(--btn-ink); font-weight: 600; cursor: pointer; }
+  .primary:disabled { opacity: .5; cursor: default; }
+  .folders { border: 1px solid var(--line); border-radius: 12px; padding: 6px 12px; margin-bottom: 10px; max-height: 240px; overflow: auto; }
+  .folders label { display: flex; gap: 10px; align-items: center; padding: 5px 0; cursor: pointer; font-size: 13.5px; }
+  .folders .n { color: var(--muted); font-size: 12px; margin-left: auto; white-space: nowrap; }
+
+  /* setup */
+  #setup { max-width: 640px; margin: 6vh auto 0; padding: 0 20px 40px; }
+  #setup h2 { font-size: 22px; margin: 0 0 6px; }
+  #setup .f { display: block; margin-bottom: 20px; }
+  #setup .f > span { display: block; font-weight: 600; margin-bottom: 6px; font-size: 14px; }
+  #setup input[type=password], #setup input[type=text] { width: 100%; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; font-size: 14px; }
+  #setup small { display: block; color: var(--muted); margin-top: 6px; line-height: 1.6; font-size: 12.5px; }
+  #setup small a { color: var(--accent); }
+  body.setup-mode .composer-area, body.setup-mode #thread { display: none; }
+  body.setup-mode #setupWrap { flex: 1; overflow-y: auto; }
+  #setupWrap[hidden] { display: none; }
+
+  .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 20; }
+  .scrim[hidden] { display: none; }
+
+  @media (min-width: 1101px) { body.drawer-open main { margin-right: 380px; } }
+  @media (max-width: 900px) {
+    #sidebar { position: fixed; top: 0; bottom: 0; left: 0; z-index: 22; }
+    body:not(.sb-closed) .scrim.sb { display: block; }
+    #drawer { width: 100%; }
+  }
 </style>
 </head>
 <body>
-<header>
-  <h1>Legal-Agent</h1>
-  <span class="model" id="model"></span>
-  <button type="button" class="usage" id="usageBtn" title="今月の API 利用料（概算）。クリックで月別の明細">今月 —</button>
-  <div class="sources" id="sources"></div>
-</header>
+<div class="app">
+  <nav id="sidebar">
+    <div class="sb-top">
+      <button class="icon-btn" id="sbToggle" title="サイドバーを閉じる" aria-label="サイドバーを閉じる">☰</button>
+      <button class="new-chat" id="newSession">＋　新しい調査</button>
+    </div>
+    <div class="sb-scroll" id="sessions"></div>
+    <div class="sb-bottom">
+      <div id="indexInfo"></div>
+      <div class="row"><button class="link" id="reindex">索引を更新</button></div>
+      <button type="button" class="usage-btn" id="usageBtn" title="今月の API 利用料（概算）。クリックで月別の明細">今月 —</button>
+    </div>
+  </nav>
+  <div class="scrim sb" id="sbScrim" hidden></div>
+
+  <main>
+    <div class="topbar">
+      <button class="icon-btn" id="sbOpen" title="サイドバーを開く" aria-label="サイドバーを開く" hidden>☰</button>
+      <span class="brand">Legal-Agent</span>
+      <span class="model" id="model"></span>
+    </div>
+
+    <div id="setupWrap" hidden>
+      <div id="setup">
+        <h2>はじめに設定</h2>
+        <p class="hint" style="margin-top:0;margin-bottom:22px">1 回だけの設定です。API キーと、手持ちの書籍 PDF が入ったフォルダを指定してください。</p>
+        <form id="setupForm">
+          <label class="f">
+            <span>Anthropic API キー</span>
+            <input id="setupKey" type="password" autocomplete="off" placeholder="sk-ant-…">
+            <small><a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Anthropic コンソール</a>で「Create Key」を押して発行し、ここに貼り付けてください。キーはこの PC の .env にのみ保存されます。</small>
+          </label>
+          <div class="f">
+            <span>書籍 PDF のフォルダ</span>
+            <div id="setupFolders" class="folders"><div class="hint">OneDrive の同期フォルダを探しています…</div></div>
+            <input id="setupManual" type="text" placeholder="一覧に無い場合はフォルダのパスを貼り付け（任意）">
+            <small>チェックしたフォルダ内の PDF を全文索引します（OneDrive でクラウドのみになっている PDF は、あなたが許可したものだけダウンロードします）。後から「索引を更新」で再スキャンできます。</small>
+          </div>
+          <div class="f">
+            <button id="setupSave" class="primary" type="submit">保存して開始</button>
+            <span id="setupMsg" class="hint" style="margin-left:10px"></span>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="thread">
+      <div class="empty" id="empty">
+        <h2>何を調べますか？</h2>
+        <div class="cards" id="examples">
+          <button class="card" type="button"><b>整理解雇の四要件</b><span>近年の裁判例と手持ちの書籍の解説を踏まえて整理して</span></button>
+          <button class="card" type="button"><b>建物明渡しと信頼関係破壊</b><span>賃料不払いでの解除が認められた例・否定された例を対比して</span></button>
+          <button class="card" type="button"><b>遺留分侵害額請求の実務</b><span>算定方法と期間制限を、根拠条文と裁判例つきで説明して</span></button>
+        </div>
+      </div>
+      <div class="wrap" id="log"></div>
+    </div>
+
+    <div class="composer-area">
+      <form class="composer" id="form">
+        <button type="button" class="plus" id="srcBtn" title="検索する情報源を選ぶ" aria-label="情報源">＋</button>
+        <div class="pop" id="srcPop" hidden>
+          <h3>検索する情報源</h3>
+          <div id="sources"></div>
+        </div>
+        <textarea id="input" rows="1" placeholder="調査したい論点を入力" title="Enter で送信、Shift+Enter で改行"></textarea>
+        <button class="send" id="send" type="submit" title="送信" aria-label="送信" disabled>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+        </button>
+      </form>
+      <div class="footnote" id="statusLine"></div>
+    </div>
+  </main>
+
+  <aside id="drawer">
+    <header>出典<button type="button" id="drawerClose" aria-label="閉じる">×</button></header>
+    <div id="cites"><div class="hint">回答が生成されると、引用した判例・文献がここに並びます。</div></div>
+  </aside>
+</div>
+
 <div class="overlay" id="dlOverlay" hidden>
   <div class="panel" role="dialog" aria-labelledby="dlTitle">
     <h2 id="dlTitle">クラウドのみの PDF をダウンロードする許可<button type="button" id="dlClose">閉じる</button></h2>
     <div class="hint">OneDrive の「ファイル オンデマンド」でこの PC にまだ無い PDF です。索引を作るには実ファイルが必要なため、許可したものだけ OneDrive からダウンロードして索引します（許可は記憶され、次回以降は聞きません）。</div>
-    <div id="dlBody" style="margin-top:10px"><div class="hint">読み込み中…</div></div>
-    <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-      <button type="button" id="dlAllow" class="new" style="width:auto;padding:8px 16px;border-radius:8px;border:none;background:var(--accent);color:var(--accent-ink);font-weight:600;cursor:pointer">選択した PDF をダウンロードして索引</button>
-      <label style="font-size:12px;display:flex;gap:6px;align-items:center"><input type="checkbox" id="dlAll">以後、このフォルダの PDF はすべて自動で許可する</label>
+    <div id="dlBody" style="margin-top:12px"><div class="hint">読み込み中…</div></div>
+    <div style="margin-top:14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <button type="button" id="dlAllow" class="primary">選択した PDF をダウンロードして索引</button>
+      <label style="font-size:12.5px;display:flex;gap:6px;align-items:center"><input type="checkbox" id="dlAll">以後、このフォルダの PDF はすべて自動で許可する</label>
       <span id="dlMsg" class="hint"></span>
     </div>
   </div>
@@ -122,55 +287,10 @@
     <div id="usageBody"><div class="hint">読み込み中…</div></div>
   </div>
 </div>
-<main>
-  <aside>
-    <button class="new" id="newSession">＋ 新しい調査</button>
-    <h2>履歴</h2>
-    <div id="sessions"></div>
-    <h2 style="margin-top:14px">書籍索引</h2>
-    <div id="indexInfo" style="font-size:12px;color:var(--muted)"></div>
-    <button id="reindex" style="margin-top:6px;font-size:12px">索引を更新</button>
-  </aside>
-  <section class="chat">
-    <div class="setup" id="setup" hidden>
-      <h2>はじめに設定（1 回だけ）</h2>
-      <form id="setupForm">
-        <label class="f">
-          <span>Anthropic API キー</span>
-          <input id="setupKey" type="password" autocomplete="off" placeholder="sk-ant-…">
-          <small><a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Anthropic コンソール</a>で「Create Key」を押して発行し、ここに貼り付けてください。キーはこの PC の .env にのみ保存されます。</small>
-        </label>
-        <div class="f">
-          <span>書籍 PDF のフォルダ</span>
-          <div id="setupFolders" class="folders"><div class="hint">OneDrive の同期フォルダを探しています…</div></div>
-          <input id="setupManual" type="text" placeholder="一覧に無い場合はフォルダのパスを貼り付け（任意）">
-          <small>チェックしたフォルダ内の PDF を全文索引します（OneDrive でクラウドのみになっている PDF は、あなたが許可したものだけダウンロードします）。後から「索引を更新」で再スキャンできます。</small>
-        </div>
-        <div class="f">
-          <button id="setupSave" type="submit">保存して開始</button>
-          <span id="setupMsg" class="hint"></span>
-        </div>
-      </form>
-    </div>
-    <div class="log" id="log">
-      <div class="hint">質問例: 「整理解雇の四要件について、近年の裁判例と手持ちの書籍の解説を踏まえて整理して」。回答中の [番号] は右の出典パネルに対応します。</div>
-    </div>
-    <div class="compose">
-      <form id="form">
-        <textarea id="input" placeholder="調査したい論点を入力（Shift+Enter で改行、Enter で送信）"></textarea>
-        <button id="send" type="submit">送信</button>
-      </form>
-      <div class="status-line" id="statusLine"></div>
-    </div>
-  </section>
-  <section class="cites">
-    <h2>出典</h2>
-    <div id="cites"><div class="hint">回答が生成されると、引用した判例・文献がここに並びます。</div></div>
-  </section>
-</main>
+
 <script>
 const $ = (s) => document.querySelector(s);
-const state = { sessionId: null, hits: {}, busy: false, sources: {} };
+const state = { sessionId: null, hits: {}, busy: false, sources: {}, cites: [] };
 const SOURCE_ORDER = ["courts", "tkc", "local", "legal_library"];
 
 function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
@@ -181,13 +301,13 @@ function inline(s) {
   s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
   s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   s = s.replace(/\[\[\s*([a-z_]+:[^\]\s]+?)\s*\]\]/g, (m, ref) => citeChip(ref));
-  s = s.replace(/\[(\d{1,3})\]/g, (m, n) => `<a class="cite" href="#cite-${n}" data-n="${n}">[${n}]</a>`);
+  s = s.replace(/\[(\d{1,3})\]/g, (m, n) => `<a class="cite" href="#cite-${n}" data-n="${n}">${n}</a>`);
   return s;
 }
 function citeChip(ref) {
   const h = state.hits[ref];
   if (!h) return `<span class="cite unknown" title="未検索の出典">[${esc(ref)}]</span>`;
-  return `<span class="cite" title="${esc(h.title)}">[${esc(h.title.slice(0, 18))}…]</span>`;
+  return `<span class="cite" title="${esc(h.title)}">${esc(h.title.slice(0, 18))}…</span>`;
 }
 function md(text) {
   const lines = text.split("\n"); let html = ""; let list = null; let para = [];
@@ -205,11 +325,22 @@ function md(text) {
   flush(); closeList(); return html;
 }
 
-// --- 状態表示 ---
+// --- サイドバー開閉 ---
+function setSidebar(open) {
+  document.body.classList.toggle("sb-closed", !open);
+  $("#sbOpen").hidden = open;
+  $("#sbScrim").hidden = !(open && window.innerWidth <= 900);
+  localStorage.setItem("sidebar", open ? "1" : "0");
+}
+$("#sbToggle").onclick = () => setSidebar(false);
+$("#sbOpen").onclick = () => setSidebar(true);
+$("#sbScrim").onclick = () => setSidebar(false);
+setSidebar(localStorage.getItem("sidebar") !== "0" && window.innerWidth > 900);
+
 // --- 初回セットアップ ---
 let setupShown = false;
 async function showSetup() {
-  $("#setup").hidden = false; document.querySelector(".chat").classList.add("setup-mode");
+  $("#setupWrap").hidden = false; document.body.classList.add("setup-mode");
   if (setupShown) return; setupShown = true;
   try {
     const f = await (await fetch("/api/setup/folders")).json();
@@ -223,7 +354,7 @@ async function showSetup() {
     });
   } catch (e) { $("#setupFolders").innerHTML = `<div class="err">フォルダ一覧を取得できませんでした: ${esc(e.message)}</div>`; }
 }
-function hideSetup() { $("#setup").hidden = true; document.querySelector(".chat").classList.remove("setup-mode"); }
+function hideSetup() { $("#setupWrap").hidden = true; document.body.classList.remove("setup-mode"); }
 $("#setupForm").onsubmit = async (e) => {
   e.preventDefault();
   const btn = $("#setupSave"); btn.disabled = true; $("#setupMsg").textContent = "API キーを確認しています…";
@@ -241,10 +372,11 @@ $("#setupForm").onsubmit = async (e) => {
   finally { btn.disabled = false; }
 };
 
+// --- 状態（モデル・情報源・索引・利用料） ---
 async function loadStatus() {
   const st = await (await fetch("/api/status")).json();
   if (st.needs_setup) showSetup(); else hideSetup();
-  $("#model").textContent = `${st.model} / effort=${st.effort}` + (st.update && st.update.available && !st.update.applied ? "｜新しい版あり（次回起動時に自動更新）" : "");
+  $("#model").textContent = `${st.model} / effort=${st.effort}` + (st.update && st.update.available && !st.update.applied ? "　｜　新しい版あり（次回起動時に自動更新）" : "");
   updateUsageHeader(st.usage_month);
   state.sources = st.sources;
   const box = $("#sources"); box.innerHTML = "";
@@ -262,23 +394,30 @@ async function loadStatus() {
       if (st.auto_configure) extra += ` <button type="button" data-autoconf="${name}" title="Claude が画面構造を解析して検索方法を自動設定">${s.configured ? "再設定" : "自動設定"}</button>`;
     }
     const detail = s.requires_login && s.configured ? `${s.detail || ""}・設定済` : (s.detail || "");
-    el.innerHTML = `<input type="checkbox" data-src="${name}" ${checked ? "checked" : ""}><span class="dot ${dot}"></span>${esc(s.label)}<span style="color:var(--muted)">${esc(detail)}</span>` + extra;
+    el.innerHTML = `<input type="checkbox" data-src="${name}" ${checked ? "checked" : ""}><span class="dot ${dot}"></span>` +
+      `<span class="lbl">${esc(s.label)} <span class="detail">${esc(detail)}</span></span>` + extra;
     box.appendChild(el);
   }
-  box.querySelectorAll("input[data-src]").forEach(i => i.addEventListener("change", e => localStorage.setItem("src:" + e.target.dataset.src, e.target.checked ? "1" : "0")));
+  box.querySelectorAll("input[data-src]").forEach(i => i.addEventListener("change", e => { localStorage.setItem("src:" + e.target.dataset.src, e.target.checked ? "1" : "0"); updateSrcBtn(); }));
   box.querySelectorAll("button[data-login]").forEach(b => b.addEventListener("click", () => startLogin(b.dataset.login, false)));
   box.querySelectorAll("button[data-login-manual]").forEach(b => b.addEventListener("click", () => startLogin(b.dataset.loginManual, true)));
   box.querySelectorAll("button[data-autoconf]").forEach(b => b.addEventListener("click", () => startAutoconf(b.dataset.autoconf)));
-  let idx = `${st.index.documents} 冊 / ${st.index.pages} ページ` + (st.indexing ? "（更新中…）" : "") + (st.pdf_dirs.length ? "" : "（PDF_DIRS 未設定）");
+  updateSrcBtn();
+
+  let idx = `書籍索引: ${st.index.documents} 冊 / ${st.index.pages} ページ` + (st.indexing ? "（更新中…）" : "") + (st.pdf_dirs.length ? "" : "（未設定）");
   for (const d of (st.pdf_dirs_status || [])) {
     const name = d.path.split(/[\\/]/).filter(Boolean).pop() || d.path;
     if (!d.exists) idx += `<div class="err">「${esc(name)}」が見つかりません（OneDrive にサインインしているか確認）</div>`;
     else if (d.cloud_only > 0) idx += `<div>「${esc(name)}」: クラウドのみ ${d.cloud_only} 冊</div>`;
   }
-  if (st.pending_downloads > 0) idx += `<div class="err" style="margin-top:4px">ダウンロード許可待ち ${st.pending_downloads} 冊 <button type="button" id="dlBtn" style="font-size:11px">許可する…</button></div>`;
+  if (st.pending_downloads > 0) idx += `<div class="err" style="margin-top:4px">ダウンロード許可待ち ${st.pending_downloads} 冊 <button type="button" class="link" id="dlBtn" style="color:inherit">許可する…</button></div>`;
   $("#indexInfo").innerHTML = idx;
   const dlBtn = $("#dlBtn"); if (dlBtn) dlBtn.onclick = openDownloads;
   if (st.indexing) setTimeout(loadStatus, 5000);
+}
+function updateSrcBtn() {
+  const n = enabledSources().length;
+  $("#srcBtn").title = `検索する情報源（${n} 件が有効）`;
 }
 async function startLogin(site, manual) {
   const r = await (await fetch(`/api/login/${site}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ manual }) })).json();
@@ -298,12 +437,20 @@ async function startAutoconf(site) {
 }
 function setStatus(t) { $("#statusLine").textContent = t; }
 
+// 情報源ポップオーバー
+$("#srcBtn").onclick = (e) => { e.stopPropagation(); const p = $("#srcPop"); p.hidden = !p.hidden; $("#srcBtn").classList.toggle("on", !p.hidden); };
+document.addEventListener("click", e => {
+  if ($("#srcPop").hidden) return;
+  if (e.target.closest("#srcPop") || e.target.closest("#srcBtn")) return;
+  $("#srcPop").hidden = true; $("#srcBtn").classList.remove("on");
+});
+
 // --- API 利用料（月額・概算） ---
 const usd = (x) => `$${(x || 0).toFixed(2)}`;
 const jpy = (x) => `${Math.round(x || 0).toLocaleString()} 円`;
 function updateUsageHeader(u) {
   const b = $("#usageBtn"); if (!u) return;
-  b.textContent = `今月 約 ${usd(u.cost_usd)}（約 ${jpy(u.cost_jpy)}）` + (u.over_budget ? " ⚠ 予算超過" : "");
+  b.textContent = `今月の利用料 約 ${usd(u.cost_usd)}（約 ${jpy(u.cost_jpy)}）` + (u.over_budget ? " ⚠ 予算超過" : "");
   b.classList.toggle("over", !!u.over_budget);
 }
 async function refreshUsage() {
@@ -359,7 +506,12 @@ $("#dlClose").onclick = () => { $("#dlOverlay").hidden = true; };
 $("#dlOverlay").addEventListener("click", e => { if (e.target === $("#dlOverlay")) $("#dlOverlay").hidden = true; });
 $("#usageClose").onclick = () => { $("#usageOverlay").hidden = true; };
 $("#usageOverlay").addEventListener("click", e => { if (e.target === $("#usageOverlay")) $("#usageOverlay").hidden = true; });
-document.addEventListener("keydown", e => { if (e.key === "Escape") { $("#usageOverlay").hidden = true; $("#dlOverlay").hidden = true; } });
+document.addEventListener("keydown", e => {
+  if (e.key !== "Escape") return;
+  $("#usageOverlay").hidden = true; $("#dlOverlay").hidden = true;
+  $("#srcPop").hidden = true; $("#srcBtn").classList.remove("on");
+  closeDrawer();
+});
 function usageText(u) {
   if (!u) return "";
   const n = (x) => (x || 0).toLocaleString();
@@ -368,39 +520,114 @@ function usageText(u) {
 }
 function enabledSources() { return [...document.querySelectorAll("input[data-src]")].filter(i => i.checked).map(i => i.dataset.src); }
 
-// --- セッション ---
+// --- セッション（履歴） ---
+function groupOf(ts) {
+  const d = new Date((ts || 0) * 1000); const now = new Date();
+  const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day(now) - day(d)) / 86400000);
+  if (diff <= 0) return "今日";
+  if (diff === 1) return "昨日";
+  if (diff <= 7) return "過去 7 日間";
+  if (diff <= 30) return "過去 30 日間";
+  return "それ以前";
+}
 async function loadSessions() {
   const list = await (await fetch("/api/sessions")).json();
+  list.sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0));  // 見出し（今日／昨日…）が前後しないように
   const box = $("#sessions"); box.innerHTML = "";
+  if (!list.length) { box.innerHTML = '<div class="sb-group">履歴はまだありません</div>'; return; }
+  let group = null;
   for (const s of list) {
+    const g = groupOf(s.updated_at);
+    if (g !== group) { group = g; const h = document.createElement("div"); h.className = "sb-group"; h.textContent = g; box.appendChild(h); }
     const d = document.createElement("div"); d.className = "sess" + (s.id === state.sessionId ? " active" : "");
-    d.textContent = s.title; d.title = s.title; d.onclick = () => openSession(s.id); box.appendChild(d);
+    d.innerHTML = `<span></span><button class="del" title="この調査を削除" aria-label="削除">🗑</button>`;
+    d.querySelector("span").textContent = s.title; d.title = s.title;
+    d.onclick = () => openSession(s.id);
+    d.querySelector(".del").onclick = async (e) => {
+      e.stopPropagation();
+      if (!confirm(`「${s.title}」を削除しますか？`)) return;
+      await fetch(`/api/sessions/${s.id}`, { method: "DELETE" });
+      if (state.sessionId === s.id) newSession();
+      loadSessions();
+    };
+    box.appendChild(d);
   }
 }
 async function openSession(id) {
   const s = await (await fetch(`/api/sessions/${id}`)).json();
-  state.sessionId = s.id; state.hits = {};
-  const log = $("#log"); log.innerHTML = "";
-  let lastCites = [];
+  state.sessionId = s.id; state.hits = {}; state.cites = [];
+  $("#log").innerHTML = ""; setEmpty(false);
   for (const t of s.turns) {
     if (t.role === "user") addUser(t.text);
-    else { const el = addAssistant(); el.innerHTML = md(t.text); lastCites = t.citations || []; }
+    else {
+      const turn = addAssistant();
+      turn.body.innerHTML = md(t.text);
+      finishTurn(turn, t.citations || [], t.usage);
+    }
   }
-  renderCites(lastCites); loadSessions();
+  closeDrawer(); loadSessions(); scrollDown(true);
+  if (window.innerWidth <= 900) setSidebar(false);
 }
-$("#newSession").onclick = () => { state.sessionId = null; state.hits = {}; $("#log").innerHTML = ""; renderCites([]); loadSessions(); };
+function newSession() {
+  state.sessionId = null; state.hits = {}; state.cites = [];
+  $("#log").innerHTML = ""; setEmpty(true); setStatus(""); closeDrawer(); loadSessions();
+}
+$("#newSession").onclick = () => { newSession(); if (window.innerWidth <= 900) setSidebar(false); };
 
 // --- 表示部品 ---
-function addUser(text) { const d = document.createElement("div"); d.className = "msg user"; d.textContent = text; $("#log").appendChild(d); scroll(); return d; }
-function addAssistant() { const d = document.createElement("div"); d.className = "msg assistant"; $("#log").appendChild(d); return d; }
-function scroll() { const l = $("#log"); l.scrollTop = l.scrollHeight; }
+function addUser(text) {
+  setEmpty(false);
+  const d = document.createElement("div"); d.className = "turn user";
+  const b = document.createElement("div"); b.className = "bubble"; b.textContent = text;
+  d.appendChild(b); $("#log").appendChild(d); scrollDown(); return d;
+}
+function addAssistant() {
+  setEmpty(false);
+  const d = document.createElement("div"); d.className = "turn assistant";
+  d.innerHTML = `<div class="avatar">法</div><div class="col">` +
+    `<details class="step steps" hidden><summary>調査の過程</summary><div class="tools"></div></details>` +
+    `<details class="step think" hidden><summary>考えています…</summary><div class="think-text"></div></details>` +
+    `<div class="body"></div><div class="actions" hidden></div></div>`;
+  $("#log").appendChild(d); scrollDown();
+  return { el: d, steps: d.querySelector(".steps"), tools: d.querySelector(".tools"), think: d.querySelector(".think"),
+           thinkText: d.querySelector(".think-text"), body: d.querySelector(".body"), actions: d.querySelector(".actions") };
+}
+function finishTurn(turn, cites, usage) {
+  const idx = state.cites.push(cites || []) - 1;
+  turn.el.dataset.turn = String(idx);
+  const a = turn.actions; a.innerHTML = ""; a.hidden = false;
+  if (cites && cites.length) {
+    const b = document.createElement("button"); b.type = "button"; b.textContent = `出典 ${cites.length} 件`;
+    b.onclick = () => openDrawer(idx); a.appendChild(b);
+  }
+  const copy = document.createElement("button"); copy.type = "button"; copy.textContent = "コピー";
+  copy.onclick = () => { navigator.clipboard.writeText(turn.body.innerText).then(() => { copy.textContent = "コピーしました"; setTimeout(() => copy.textContent = "コピー", 1500); }); };
+  a.appendChild(copy);
+  if (usage) { const m = document.createElement("span"); m.className = "meta"; m.textContent = usageText(usage); a.appendChild(m); }
+  if (turn.steps.hasAttribute("open")) turn.steps.removeAttribute("open");
+  turn.think.hidden = !turn.thinkText.textContent;
+  turn.think.querySelector("summary").textContent = "考えた内容";
+  turn.think.removeAttribute("open");
+}
+function setEmpty(on) { $("#empty").hidden = !on; document.body.classList.toggle("empty-state", on); }
+function scrollDown(force) {
+  const t = $("#thread");
+  if (force || t.scrollHeight - t.scrollTop - t.clientHeight < 260) t.scrollTop = t.scrollHeight;
+}
+function openDrawer(idx) {
+  if (idx != null) renderCites(state.cites[idx] || []);
+  $("#drawer").classList.add("open"); document.body.classList.add("drawer-open");
+}
+function closeDrawer() { $("#drawer").classList.remove("open"); document.body.classList.remove("drawer-open"); }
+$("#drawerClose").onclick = closeDrawer;
 function renderCites(cites) {
   const box = $("#cites"); box.innerHTML = "";
   if (!cites.length) { box.innerHTML = '<div class="hint">引用はありません。</div>'; return; }
   for (const c of cites) {
     const d = document.createElement("div"); d.className = "cite-item"; d.id = `cite-${c.number}`;
     const url = c.url ? `<a href="${esc(c.url)}" target="_blank" rel="noopener">${c.source === "local" ? "PDF を開く" : "原典を開く"}</a>` : "";
-    d.innerHTML = `<span class="n">[${c.number}]</span><span class="t">${esc(c.title)}</span><div class="s">${esc(c.subtitle || "")}</div>` +
+    d.innerHTML = `<div><span class="n">[${c.number}]</span><span class="t">${esc(c.title)}</span></div><div class="s">${esc(c.subtitle || "")}</div>` +
       (c.snippet ? `<div class="x">${esc(c.snippet)}</div>` : "") + `<div class="x">${esc(labelOf(c.source))} ${url}</div>`;
     box.appendChild(d);
   }
@@ -408,20 +635,35 @@ function renderCites(cites) {
 function labelOf(src) { return (state.sources[src] && state.sources[src].label) || src; }
 document.addEventListener("click", e => {
   const a = e.target.closest("a.cite"); if (!a) return;
-  e.preventDefault(); const el = document.getElementById(`cite-${a.dataset.n}`);
+  e.preventDefault();
+  const turn = a.closest(".turn");
+  openDrawer(turn && turn.dataset.turn ? Number(turn.dataset.turn) : null);
+  const el = document.getElementById(`cite-${a.dataset.n}`);
   if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 1500); }
+});
+
+// --- 入力欄 ---
+const input = $("#input");
+function autoGrow() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 200) + "px"; }
+function updateSend() { $("#send").disabled = state.busy || !input.value.trim(); }
+input.addEventListener("input", () => { autoGrow(); updateSend(); });
+input.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("#form").requestSubmit(); } });
+document.querySelectorAll("#examples .card").forEach(c => c.onclick = () => {
+  input.value = c.querySelector("b").textContent + "について、" + c.querySelector("span").textContent;
+  autoGrow(); updateSend(); input.focus();
 });
 
 // --- 送信と SSE 受信 ---
 $("#form").onsubmit = async (e) => {
   e.preventDefault();
-  const text = $("#input").value.trim(); if (!text || state.busy) return;
-  $("#input").value = ""; state.busy = true; $("#send").disabled = true;
+  const text = input.value.trim(); if (!text || state.busy) return;
+  input.value = ""; autoGrow(); state.busy = true; updateSend();
+  $("#srcPop").hidden = true; $("#srcBtn").classList.remove("on");
   addUser(text);
-  const activity = document.createElement("div"); activity.className = "activity"; $("#log").appendChild(activity);
-  const think = document.createElement("div"); think.className = "thinking"; think.hidden = true; $("#log").appendChild(think);
-  const out = addAssistant(); let buf = ""; let curTool = null;
+  const turn = addAssistant(); let buf = ""; let curTool = null; let steps = 0;
+  turn.body.classList.add("caret");
   setStatus("調査中…");
+  scrollDown(true);
   try {
     const res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: text, session_id: state.sessionId, sources: enabledSources() }) });
@@ -436,39 +678,53 @@ $("#form").onsubmit = async (e) => {
         const ev = JSON.parse(line.slice(6));
         switch (ev.type) {
           case "start": state.sessionId = ev.session_id; break;
-          case "thinking": think.hidden = false; think.textContent += ev.text; think.scrollTop = think.scrollHeight; break;
-          case "text_delta": buf += ev.text; out.innerHTML = md(buf); scroll(); break;
+          case "thinking": turn.think.hidden = false; turn.think.open = true; turn.thinkText.textContent += ev.text; turn.thinkText.scrollTop = turn.thinkText.scrollHeight; scrollDown(); break;
+          case "text_delta": buf += ev.text; turn.body.innerHTML = md(buf); turn.body.classList.add("caret"); scrollDown(); break;
           case "tool_call": {
-            curTool = document.createElement("details"); curTool.open = true;
+            steps++; turn.steps.hidden = false; turn.steps.open = true;
+            turn.steps.querySelector("summary").textContent = `調査の過程（${steps} 件）`;
+            curTool = document.createElement("div"); curTool.className = "tool";
             const inp = Object.entries(ev.input).filter(([k, v]) => v).map(([k, v]) => `${k}=${Array.isArray(v) ? v.join(",") : v}`).join(" ");
-            curTool.innerHTML = `<summary>🔎 ${esc(ev.name)}: ${esc(inp)}</summary>`; activity.appendChild(curTool); scroll(); break; }
+            curTool.innerHTML = `🔎 ${esc(ev.name)}: ${esc(inp)}`;
+            turn.tools.appendChild(curTool); scrollDown(); break; }
           case "tool_progress": setStatus(ev.message); break;
           case "tool_result": {
             for (const h of ev.hits) state.hits[h.ref] = h;
             if (curTool) {
-              const box = document.createElement("div");
-              box.innerHTML = `<div class="hit">${esc(labelOf(ev.source))}: ${ev.count} 件${ev.fetched ? "（本文取得）" : ""}</div>` +
-                ev.hits.slice(0, 10).map(h => `<div class="hit">・${esc(h.title)} <span style="color:var(--muted)">${esc(h.subtitle || "")}</span></div>`).join("");
-              curTool.appendChild(box); curTool.open = false;
+              curTool.innerHTML += `<div class="hit">${esc(labelOf(ev.source))}: ${ev.count} 件${ev.fetched ? "（本文取得）" : ""}</div>` +
+                ev.hits.slice(0, 10).map(h => `<div class="hit">・${esc(h.title)} <span style="opacity:.75">${esc(h.subtitle || "")}</span></div>`).join("");
             }
             break; }
-          case "login_required": setStatus(`${labelOf(ev.site)} は未ログインです。右上の「ログイン」から手動でログインしてください。`); loadStatus(); break;
+          case "login_required": setStatus(`${labelOf(ev.site)} は未ログインです。入力欄の「＋」からログインしてください。`); loadStatus(); break;
           case "memo_saved": setStatus(`メモを保存しました: ${ev.path}`); break;
           case "usage": setStatus("調査中… " + usageText(ev)); break;
-          case "done": out.innerHTML = md(ev.text); renderCites(ev.citations); state.sessionId = ev.session_id;
-            setStatus("完了 " + usageText(ev.usage) + (ev.session_usage && ev.session_usage.cost_usd != null ? `｜このセッション累計 約 $${ev.session_usage.cost_usd.toFixed(2)}` : "")); refreshUsage(); break;
-          case "error": out.innerHTML += `<p class="err">エラー: ${esc(ev.message)}</p>`; setStatus("エラー"); break;
+          case "done":
+            turn.body.innerHTML = md(ev.text); turn.body.classList.remove("caret");
+            state.sessionId = ev.session_id;
+            finishTurn(turn, ev.citations, ev.usage);
+            setStatus("完了　" + usageText(ev.usage) + (ev.session_usage && ev.session_usage.cost_usd != null ? `　｜　このセッション累計 約 $${ev.session_usage.cost_usd.toFixed(2)}` : ""));
+            refreshUsage(); break;
+          case "error": turn.body.innerHTML += `<p class="err">エラー: ${esc(ev.message)}</p>`; setStatus("エラー"); break;
         }
       }
     }
-  } catch (err) { out.innerHTML += `<p class="err">通信エラー: ${esc(err.message)}</p>`; }
-  finally { state.busy = false; $("#send").disabled = false; loadSessions(); scroll(); }
+  } catch (err) { turn.body.innerHTML += `<p class="err">通信エラー: ${esc(err.message)}</p>`; }
+  finally {
+    turn.body.classList.remove("caret");
+    if (turn.actions.hidden) finishTurn(turn, [], null);
+    state.busy = false; updateSend(); loadSessions(); scrollDown();
+  }
 };
-$("#input").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("#form").requestSubmit(); } });
-$("#reindex").onclick = async () => { setStatus("索引を更新中…"); const r = await fetch("/api/index", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
-  const j = await r.json(); setStatus(r.ok ? `索引更新: 追加 ${j.added} / 変更なし ${j.skipped} / 失敗 ${j.failed}` : `索引エラー: ${j.detail}`); loadStatus(); };
 
-loadStatus(); loadSessions();
+$("#reindex").onclick = async () => {
+  setStatus("索引を更新中…");
+  const r = await fetch("/api/index", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+  const j = await r.json();
+  setStatus(r.ok ? `索引更新: 追加 ${j.added} / 変更なし ${j.skipped} / 失敗 ${j.failed}` : `索引エラー: ${j.detail}`);
+  loadStatus();
+};
+
+setEmpty(true); loadStatus(); loadSessions(); autoGrow();
 </script>
 </body>
 </html>
