@@ -49,13 +49,17 @@ def cmd_update(args: argparse.Namespace) -> None:
 
 
 def cmd_usage(args: argparse.Namespace) -> None:
+    from .agent.estimate import estimate, format_estimate
     from .agent.sessions import SessionStore
     from .agent.usage_ledger import UsageLedger, format_table
 
     s = get_settings()
+    store = SessionStore(s.sessions_dir)
     ledger = UsageLedger(s.usage_db_path)
-    ledger.backfill_from_sessions(SessionStore(s.sessions_dir), s.model)
+    ledger.backfill_from_sessions(store, s.model)
     print(format_table(ledger.months(limit=args.months), s.usd_jpy))
+    print()
+    print(format_estimate(estimate(store, s.usd_jpy)))
 
 
 def cmd_doctor(args: argparse.Namespace) -> None:

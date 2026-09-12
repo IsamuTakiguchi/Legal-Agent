@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from .agent.runner import AgentRunner
 from .agent.sessions import SessionStore
+from .agent.estimate import estimate as estimate_cost
 from .agent.usage_ledger import CONSOLE_COST_URL, NOTE as USAGE_NOTE, month_view
 from .config import Settings, get_settings
 from .index.approvals import DownloadApprovals
@@ -65,6 +66,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def _pending() -> list[dict[str, Any]]:
         return pending_downloads(settings.pdf_dirs, approvals, settings.auto_download_cloud_pdfs)
 
+    def _estimate() -> dict[str, Any]:
+        """1 問あたりの費用の目安（過去の実績から）。質問のたびに変わるので都度計算してキャッシュする。"""
+        bg["estimate"] = estimate_cost(store, settings.usd_jpy)
+        return bg["estimate"]
+
     def _refresh_dirs() -> None:
         """PDF フォルダの走査結果（/api/status 用）。OneDrive の走査は遅いので索引のたびに計算して覚えておく。"""
         bg["dirs_status"] = [describe_dir(p) for p in settings.pdf_dirs]
@@ -72,7 +78,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     login_tasks: dict[str, asyncio.Task] = {}
     autoconf_tasks: dict[str, asyncio.Task] = {}
     chat_lock = asyncio.Lock()
-    bg: dict[str, Any] = {"indexing": False, "index_result": None, "startup_login": {}, "update": None, "dirs_status": None, "pending": None}
+    bg: dict[str, Any] = {"indexing": False, "index_result": None, "startup_login": {}, "update": None, "dirs_status": None, "pending": None, "estimate": None}
     bg_tasks: list[asyncio.Task] = []
     index_wake = asyncio.Event()  # セットアップ完了時などに即時再スキャンさせる
 
@@ -153,6 +159,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def status() -> dict[str, Any]:
         if bg["dirs_status"] is None:
             await asyncio.to_thread(_refresh_dirs)
+        if bg["estimate"] is None:
+            await asyncio.to_thread(_estimate)
         return {
             "needs_setup": settings.needs_setup,
             "model": settings.model,
@@ -168,6 +176,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "auto_configure": settings.auto_configure,
             "update": bg["update"],
             "usage_month": month_view(runner.ledger, settings.usd_jpy, settings.monthly_budget_usd),
+            "estimate": bg["estimate"],
             "limits": {
                 "max_searches_per_source": settings.max_searches_per_source,
                 "max_fetches_per_run": settings.max_fetches_per_run,
@@ -224,6 +233,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 yield _sse({"type": "start", "session_id": session.id})
                 async for ev in runner.run(session, req.message, enabled):
                     yield _sse(ev)
+            bg["estimate"] = None  # 1 問終わるたびに目安を計算し直す
 
         return StreamingResponse(gen(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
@@ -231,7 +241,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def usage(months: int = 12) -> dict[str, Any]:
         """月ごとの API 利用料（概算）。"""
         ms = runner.ledger.months(limit=max(1, min(months, 60)))
+        est = await asyncio.to_thread(_estimate)
         return {
+            "estimate": est,
             "month": ms[0]["month"],
             "this_month": ms[0],
             "months": ms,

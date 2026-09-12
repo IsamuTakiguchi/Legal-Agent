@@ -115,6 +115,8 @@
   .plus:hover { background: var(--hover); }
   .plus.on { background: var(--hover); }
   .footnote { max-width: 768px; margin: 6px auto 0; text-align: center; font-size: 11.5px; color: var(--muted); min-height: 16px; padding: 0 4px; }
+  .footnote button { border: none; background: transparent; color: inherit; font: inherit; cursor: pointer; padding: 0; text-decoration: underline dotted; text-underline-offset: 2px; }
+  .footnote button:hover { color: var(--ink); }
 
   /* source popover */
   .pop { position: absolute; bottom: 52px; left: 0; width: min(420px, 86vw); background: var(--bg); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 8px 30px rgba(0,0,0,.18); padding: 8px; z-index: 15; }
@@ -260,6 +262,7 @@
         </button>
       </form>
       <div class="footnote" id="statusLine"></div>
+      <div class="footnote" id="costHint"></div>
     </div>
   </main>
 
@@ -290,7 +293,7 @@
 
 <script>
 const $ = (s) => document.querySelector(s);
-const state = { sessionId: null, hits: {}, busy: false, sources: {}, cites: [] };
+const state = { sessionId: null, hits: {}, busy: false, sources: {}, cites: [], estimate: null };
 const SOURCE_ORDER = ["courts", "tkc", "local", "legal_library"];
 
 function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
@@ -377,7 +380,7 @@ async function loadStatus() {
   const st = await (await fetch("/api/status")).json();
   if (st.needs_setup) showSetup(); else hideSetup();
   $("#model").textContent = `${st.model} / effort=${st.effort}` + (st.update && st.update.available && !st.update.applied ? "　｜　新しい版あり（次回起動時に自動更新）" : "");
-  updateUsageHeader(st.usage_month);
+  updateUsageHeader(st.usage_month); setEstimate(st.estimate);
   state.sources = st.sources;
   const box = $("#sources"); box.innerHTML = "";
   for (const name of SOURCE_ORDER) {
@@ -437,6 +440,24 @@ async function startAutoconf(site) {
 }
 function setStatus(t) { $("#statusLine").textContent = t; }
 
+// --- 1 問あたりの費用の目安（過去の実績から） ---
+function pickEst(est) {
+  if (!est || !est.samples) return null;
+  return (state.sessionId ? est.followup : est.first) || est.all;
+}
+function renderCostHint() {
+  const box = $("#costHint"); const est = state.estimate; const s = pickEst(est);
+  if (!s) { box.innerHTML = '<button type="button">1 問あたりの費用は、最初の質問のあとに実績から表示します</button>'; }
+  else {
+    const rate = est.usd_jpy || 150;
+    const kind = state.sessionId ? "この調査を続けた場合の 1 問の目安" : "1 問あたりの目安";
+    box.innerHTML = `<button type="button">${kind} 約 ${usd(s.median_usd)}（約 ${jpy(s.median_usd * rate)}）` +
+      `・よくある範囲 ${usd(s.low_usd)}〜${usd(s.high_usd)}（直近 ${s.n} 問の実績）</button>`;
+  }
+  box.querySelector("button").onclick = openUsage;
+}
+function setEstimate(est) { if (est) state.estimate = est; renderCostHint(); }
+
 // 情報源ポップオーバー
 $("#srcBtn").onclick = (e) => { e.stopPropagation(); const p = $("#srcPop"); p.hidden = !p.hidden; $("#srcBtn").classList.toggle("on", !p.hidden); };
 document.addEventListener("click", e => {
@@ -454,7 +475,11 @@ function updateUsageHeader(u) {
   b.classList.toggle("over", !!u.over_budget);
 }
 async function refreshUsage() {
-  try { const j = await (await fetch("/api/usage?months=1")).json(); updateUsageHeader({ cost_usd: j.this_month.cost_usd, cost_jpy: j.this_month.cost_usd * j.usd_jpy, over_budget: !!(j.monthly_budget_usd && j.this_month.cost_usd > j.monthly_budget_usd) }); } catch (e) {}
+  try {
+    const j = await (await fetch("/api/usage?months=1")).json();
+    updateUsageHeader({ cost_usd: j.this_month.cost_usd, cost_jpy: j.this_month.cost_usd * j.usd_jpy, over_budget: !!(j.monthly_budget_usd && j.this_month.cost_usd > j.monthly_budget_usd) });
+    setEstimate(j.estimate);
+  } catch (e) {}
 }
 async function openUsage() {
   $("#usageOverlay").hidden = false; $("#usageBody").innerHTML = '<div class="hint">読み込み中…</div>';
@@ -466,6 +491,19 @@ async function openUsage() {
     if (j.monthly_budget_usd) html += `<div class="${cur.cost_usd > j.monthly_budget_usd ? "err" : "hint"}">月額予算 ${usd(j.monthly_budget_usd)}（${cur.cost_usd > j.monthly_budget_usd ? "超過しています" : `残り約 ${usd(j.monthly_budget_usd - cur.cost_usd)}`}）</div>`;
     const models = Object.entries(cur.by_model || {});
     if (models.length > 1) html += `<div class="hint" style="margin-top:6px">今月のモデル別: ` + models.map(([m, v]) => `${esc(m)} ${usd(v.cost_usd)}（${n(v.calls)} 回）`).join("、") + `</div>`;
+    const est = j.estimate;
+    if (est && est.samples) {
+      html += `<div style="margin-top:16px;font-weight:600;font-size:14px">1 問あたりの費用（直近 ${est.samples} 問の実績）</div>`;
+      html += `<table><thead><tr><th>区分</th><th>件数</th><th>中央値</th><th>よくある範囲（10〜90%）</th><th>最大</th><th>中央値の円換算</th></tr></thead><tbody>`;
+      for (const [key, label] of [["first", "新しい調査の 1 問目"], ["followup", "続きの質問"], ["all", "全体"]]) {
+        const s2 = est[key]; if (!s2) continue;
+        html += `<tr class="${key === "all" ? "cur" : ""}"><td>${label}</td><td>${n(s2.n)}</td><td>${usd(s2.median_usd)}</td>` +
+          `<td>${usd(s2.low_usd)}〜${usd(s2.high_usd)}</td><td>${usd(s2.max_usd)}</td><td>${jpy(s2.median_usd * rate)}</td></tr>`;
+      }
+      html += `</tbody></table>`;
+      html += `<div class="hint" style="margin-top:6px">続きの質問は会話が長いほど高くなります。費用を抑えたいときは「＋ 新しい調査」で会話を分ける、.env の LEGAL_AGENT_EFFORT を medium にする、LEGAL_AGENT_MAX_FETCHES_PER_RUN を減らす、といった方法があります。</div>`;
+    }
+    html += `<div style="margin-top:16px;font-weight:600;font-size:14px">月ごとの合計</div>`;
     html += `<table><thead><tr><th>月</th><th>回数</th><th>入力トークン</th><th>うちキャッシュ読み</th><th>出力トークン</th><th>概算 USD</th><th>概算 JPY</th></tr></thead><tbody>`;
     for (const m of j.months) {
       html += `<tr class="${m.month === cur.month ? "cur" : ""}"><td>${esc(m.month)}</td><td>${n(m.calls)}</td><td>${n(m.input + m.cache_write + m.cache_read)}</td><td>${n(m.cache_read)}</td><td>${n(m.output)}</td><td>${usd(m.cost_usd)}</td><td>${jpy(m.cost_usd * rate)}</td></tr>`;
@@ -566,12 +604,12 @@ async function openSession(id) {
       finishTurn(turn, t.citations || [], t.usage);
     }
   }
-  closeDrawer(); loadSessions(); scrollDown(true);
+  closeDrawer(); loadSessions(); scrollDown(true); renderCostHint();
   if (window.innerWidth <= 900) setSidebar(false);
 }
 function newSession() {
   state.sessionId = null; state.hits = {}; state.cites = [];
-  $("#log").innerHTML = ""; setEmpty(true); setStatus(""); closeDrawer(); loadSessions();
+  $("#log").innerHTML = ""; setEmpty(true); setStatus(""); closeDrawer(); loadSessions(); renderCostHint();
 }
 $("#newSession").onclick = () => { newSession(); if (window.innerWidth <= 900) setSidebar(false); };
 
@@ -647,6 +685,7 @@ const input = $("#input");
 function autoGrow() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 200) + "px"; }
 function updateSend() { $("#send").disabled = state.busy || !input.value.trim(); }
 input.addEventListener("input", () => { autoGrow(); updateSend(); });
+input.addEventListener("focus", () => { if (!state.busy) setStatus(""); });
 input.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("#form").requestSubmit(); } });
 document.querySelectorAll("#examples .card").forEach(c => c.onclick = () => {
   input.value = c.querySelector("b").textContent + "について、" + c.querySelector("span").textContent;

@@ -39,6 +39,9 @@ def test_status_and_sessions(client):
     assert st["usage_month"]["cost_usd"] == 0 and st["usage_month"]["over_budget"] is False and st["usage_month"]["calls"] == 0
     u = c.get("/api/usage").json()
     assert u["month"] == st["usage_month"]["month"] and u["months"][0]["calls"] == 0 and u["usd_jpy"] == 150.0
+    # 1 問あたりの費用の目安（実績がまだ無いので samples=0）
+    assert st["estimate"]["samples"] == 0 and st["estimate"]["all"] is None
+    assert u["estimate"]["samples"] == 0 and u["estimate"]["usd_jpy"] == 150.0
     assert "platform.claude.com" in u["console_url"] and "概算" in u["note"]
     # 記録すると status / usage に反映される
     from types import SimpleNamespace
@@ -62,6 +65,8 @@ def test_chat_stream_with_stubbed_runner(client):
         events = [json.loads(l[6:]) for l in r.iter_lines() if l.startswith("data: ")]
     assert [e["type"] for e in events] == ["start", "text_delta", "done"]
     sid = events[0]["session_id"]
+    # 1 問終わると目安が計算し直される（ここでは費用の記録が無いので samples は 0 のまま）
+    assert app.state.__dict__ is not None and c.get("/api/status").json()["estimate"]["samples"] == 0
     assert c.get(f"/api/sessions/{sid}").status_code == 200
     assert c.delete(f"/api/sessions/{sid}").json() == {"deleted": True}
 

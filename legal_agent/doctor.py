@@ -100,6 +100,10 @@ def _run(after_install: bool, out) -> int:
 
         mv = month_view(UsageLedger(s.usage_db_path), s.usd_jpy, s.monthly_budget_usd)
         out(f"今月の API 利用料（概算）: 約 ${mv['cost_usd']:.2f}（約 {mv['cost_jpy']:,} 円、{mv['calls']} 回）" + ("  ※予算超過" if mv["over_budget"] else ""))
+        from .agent.estimate import estimate, format_estimate
+        from .agent.sessions import SessionStore
+
+        out(format_estimate(estimate(SessionStore(s.sessions_dir), s.usd_jpy)))
     except Exception as e:  # noqa: BLE001
         out(f"API 利用料: 読めません（{e}）")
 
