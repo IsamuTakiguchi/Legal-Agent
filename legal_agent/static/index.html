@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Legal-Agent</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%276%27 fill=%27%232f5d8a%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-size=%2718%27 text-anchor=%27middle%27 fill=%27white%27 font-family=%27sans-serif%27%3E法%3C/text%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%2032%2032%22%3E%3Crect%20width=%2232%22%20height=%2232%22%20rx=%227%22%20fill=%22%23111%22/%3E%3Cg%20fill=%22%23fff%22%20transform=%22translate%284.04%206.61%29%20scale%280.72%29%22%3E%3Crect%20x=%2212.6%22%20y=%225%22%20width=%222.8%22%20height=%2218%22/%3E%3Crect%20x=%223%22%20y=%228.6%22%20width=%2222%22%20height=%222.9%22%20rx=%221.45%22/%3E%3Crect%20x=%226.5%22%20y=%2223%22%20width=%2215%22%20height=%222.9%22%20rx=%221.45%22/%3E%3Cpath%20d=%22M1.4%2C14.2%20A4.6%2C4.6%200%200%200%2010.6%2C14.2%20Z%22/%3E%3Cpath%20d=%22M17.4%2C14.2%20A4.6%2C4.6%200%200%200%2026.6%2C14.2%20Z%22/%3E%3Cpath%20d=%22M27.8%2C0.2%20Q28.5%2C3.5%2031.8%2C4.2%20Q28.5%2C4.9%2027.8%2C8.2%20Q27.1%2C4.9%2023.8%2C4.2%20Q27.1%2C3.5%2027.8%2C0.2%20Z%22/%3E%3C/g%3E%3C/svg%3E">
 <style>
   :root {
     --bg: #ffffff; --side: #f9f9f9; --ink: #0d0d0d; --muted: #8f8f8f; --line: #e5e5e5;
@@ -52,7 +52,7 @@
   /* ---------- main ---------- */
   main { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; transition: margin-right .22s ease; }
   .topbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; min-height: 48px; }
-  .topbar .brand { font-size: 15px; font-weight: 600; }
+  .topbar .brand { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; letter-spacing: -.01em; }
   .topbar .model { font-size: 12px; color: var(--muted); }
   #thread { flex: 1; overflow-y: auto; scroll-behavior: smooth; }
   .wrap { max-width: 768px; margin: 0 auto; padding: 8px 20px 40px; }
@@ -61,6 +61,7 @@
   body.empty-state #thread { flex: 0 0 auto; overflow: visible; margin-top: auto; }
   body.empty-state .composer-area { margin-bottom: auto; padding-top: 18px; }
   .empty { max-width: 768px; margin: 0 auto; padding: 0 20px; text-align: center; }
+  .empty .mark { margin: 0 auto 14px; }
   .empty h2 { font-size: 26px; font-weight: 600; margin: 0 0 22px; }
   .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; text-align: left; }
   .card { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; cursor: pointer; background: transparent; font-size: 13.5px; line-height: 1.5; }
@@ -73,7 +74,8 @@
   .turn.user { display: flex; justify-content: flex-end; }
   .turn.user .bubble { background: var(--bubble); border-radius: 20px; padding: 10px 18px; max-width: 75%; white-space: pre-wrap; word-break: break-word; }
   .turn.assistant { display: flex; gap: 14px; align-items: flex-start; }
-  .avatar { flex: 0 0 26px; width: 26px; height: 26px; border-radius: 50%; background: #2f5d8a; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; margin-top: 2px; }
+  .mark { fill: currentColor; display: block; flex: none; }
+  .avatar { flex: 0 0 26px; width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line); color: var(--ink); display: flex; align-items: center; justify-content: center; margin-top: 2px; }
   .turn.assistant .col { flex: 1; min-width: 0; }
   .body { line-height: 1.8; word-break: break-word; }
   .body p { margin: 0 0 14px; }
@@ -191,6 +193,17 @@
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+  <!-- ロゴ: 天秤（法律）＋きらめき（AI）。単色で、置かれた場所の文字色に追従する -->
+  <symbol id="logo" viewBox="0 0 32 32">
+    <rect x="12.6" y="5" width="2.8" height="18"/>
+    <rect x="3" y="8.6" width="22" height="2.9" rx="1.45"/>
+    <rect x="6.5" y="23" width="15" height="2.9" rx="1.45"/>
+    <path d="M1.4,14.2 A4.6,4.6 0 0 0 10.6,14.2 Z"/>
+    <path d="M17.4,14.2 A4.6,4.6 0 0 0 26.6,14.2 Z"/>
+    <path d="M27.8,0.2 Q28.5,3.5 31.8,4.2 Q28.5,4.9 27.8,8.2 Q27.1,4.9 23.8,4.2 Q27.1,3.5 27.8,0.2 Z"/>
+  </symbol>
+</defs></svg>
 <div class="app">
   <nav id="sidebar">
     <div class="sb-top">
@@ -209,7 +222,7 @@
   <main>
     <div class="topbar">
       <button class="icon-btn" id="sbOpen" title="サイドバーを開く" aria-label="サイドバーを開く" hidden>☰</button>
-      <span class="brand">Legal-Agent</span>
+      <span class="brand"><svg class="mark" width="19" height="19" aria-hidden="true"><use href="#logo"/></svg>Legal-Agent</span>
       <span class="model" id="model"></span>
     </div>
 
@@ -239,6 +252,7 @@
 
     <div id="thread">
       <div class="empty" id="empty">
+        <svg class="mark" width="38" height="38" aria-hidden="true"><use href="#logo"/></svg>
         <h2>何を調べますか？</h2>
         <div class="cards" id="examples">
           <button class="card" type="button"><b>整理解雇の四要件</b><span>近年の裁判例と手持ちの書籍の解説を踏まえて整理して</span></button>
@@ -623,7 +637,7 @@ function addUser(text) {
 function addAssistant() {
   setEmpty(false);
   const d = document.createElement("div"); d.className = "turn assistant";
-  d.innerHTML = `<div class="avatar">法</div><div class="col">` +
+  d.innerHTML = `<div class="avatar"><svg class="mark" width="15" height="15" aria-hidden="true"><use href="#logo"/></svg></div><div class="col">` +
     `<details class="step steps" hidden><summary>調査の過程</summary><div class="tools"></div></details>` +
     `<details class="step think" hidden><summary>考えています…</summary><div class="think-text"></div></details>` +
     `<div class="body"></div><div class="actions" hidden></div></div>`;
