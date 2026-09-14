@@ -6,6 +6,8 @@ start.bat / check.bat / doctor から呼ばれ、無ければ毎回作り直す�
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import subprocess
 import sys
@@ -13,6 +15,48 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SHORTCUT_NAME = "Legal-Agent.lnk"
+ICON = Path(__file__).with_name("static") / "legal-agent.ico"
+
+
+def icon_file() -> Path | None:
+    """ショートカットに設定するアイコン（無ければ None＝既定のアイコンのまま）。"""
+    return ICON if ICON.exists() else None
+
+
+def icon_signature() -> str:
+    """アイコンの内容の署名。変わったらショートカットを作り直す合図にする。"""
+    icon = icon_file()
+    if icon is None:
+        return ""
+    try:
+        return hashlib.sha1(icon.read_bytes()).hexdigest()[:12]
+    except OSError:
+        return ""
+
+
+def _state_file(root: Path) -> Path:
+    return Path(root) / "data" / ".shortcut.json"
+
+
+def _saved_signature(root: Path) -> str:
+    try:
+        return str(json.loads(_state_file(root).read_text(encoding="utf-8")).get("icon", ""))
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def _save_signature(root: Path, sig: str, lnk: Path) -> None:
+    try:
+        f = _state_file(root)
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(json.dumps({"icon": sig, "lnk": str(lnk)}, ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def is_up_to_date(root: Path = ROOT) -> bool:
+    """ショートカットがあり、アイコンも今のものと一致しているか。"""
+    return find_shortcut() is not None and _saved_signature(root) == icon_signature()
 
 
 def is_windows() -> bool:
@@ -57,13 +101,14 @@ def find_shortcut() -> Path | None:
 
 
 _PS1 = r"""
-param([string]$Desktop, [string]$Target, [string]$WorkDir)
+param([string]$Desktop, [string]$Target, [string]$WorkDir, [string]$Icon)
 $path = Join-Path $Desktop "Legal-Agent.lnk"
 $shell = New-Object -ComObject WScript.Shell
 $s = $shell.CreateShortcut($path)
 $s.TargetPath = $Target
 $s.WorkingDirectory = $WorkDir
 $s.Description = "Legal-Agent"
+if ($Icon) { $s.IconLocation = "$Icon,0" }
 $s.Save()
 if (-not (Test-Path $path)) { exit 1 }
 """
@@ -74,56 +119,70 @@ Set lnk = sh.CreateShortcut(WScript.Arguments(0) & "\Legal-Agent.lnk")
 lnk.TargetPath = WScript.Arguments(1)
 lnk.WorkingDirectory = WScript.Arguments(2)
 lnk.Description = "Legal-Agent"
+If WScript.Arguments.Count > 3 Then lnk.IconLocation = WScript.Arguments(3) & ",0"
 lnk.Save
 """
 
 
-def create_desktop_shortcut(root: Path = ROOT, out=print) -> Path | None:
-    """ショートカットを作成して Path を返す。Windows 以外や失敗時は None。"""
+def create_desktop_shortcut(root: Path = ROOT, out=print, force: bool = False) -> Path | None:
+    """ショートカットを作成（アイコンが変わっていれば作り直し）して Path を返す。Windows 以外や失敗時は None。"""
     if not is_windows():
         return None
+    sig = icon_signature()
     existing = find_shortcut()
-    if existing:
+    if existing and not force and _saved_signature(root) == sig:
         return existing
-    dirs = desktop_dirs()
-    if not dirs:
-        out("デスクトップのフォルダが見つかりませんでした")
-        return None
-    desktop = dirs[0]
+    # 既にあるなら同じ場所に上書きし、無ければデスクトップの第一候補に作る
+    desktop = existing.parent if existing else None
+    if desktop is None:
+        dirs = desktop_dirs()
+        if not dirs:
+            out("デスクトップのフォルダが見つかりませんでした")
+            return None
+        desktop = dirs[0]
     target = str(root / "start.bat")
+    icon = icon_file()
     tmp = root / "data"
     tmp.mkdir(parents=True, exist_ok=True)
     ps1 = tmp / "make_shortcut.ps1"
     ps1.write_text(_PS1, encoding="utf-8")
+    cmd = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(ps1),
+           "-Desktop", str(desktop), "-Target", target, "-WorkDir", str(root)]
+    if icon is not None:
+        cmd += ["-Icon", str(icon)]
     try:
-        r = subprocess.run(
-            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(ps1), "-Desktop", str(desktop), "-Target", target, "-WorkDir", str(root)],
-            capture_output=True, text=True, timeout=60,
-        )
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
         if r.returncode != 0:
             out(f"PowerShell でのショートカット作成に失敗: {r.stderr.strip()[:300]}")
     except Exception as e:  # noqa: BLE001
         out(f"PowerShell を実行できません: {e}")
     p = desktop / SHORTCUT_NAME
     if p.exists():
+        _save_signature(root, sig, p)
         return p
     vbs = tmp / "make_shortcut.vbs"
     vbs.write_text(_VBS, encoding="utf-8")
+    args = ["cscript", "//nologo", str(vbs), str(desktop), target, str(root)]
+    if icon is not None:
+        args.append(str(icon))
     try:
-        subprocess.run(["cscript", "//nologo", str(vbs), str(desktop), target, str(root)], capture_output=True, text=True, timeout=60)
+        subprocess.run(args, capture_output=True, text=True, timeout=60)
     except Exception as e:  # noqa: BLE001
         out(f"cscript を実行できません: {e}")
-    return p if p.exists() else None
+    if p.exists():
+        _save_signature(root, sig, p)
+        return p
+    return None
 
 
-def ensure_shortcut(out=print, quiet: bool = False) -> str:
-    """状態を表す文字列を返す（doctor 用）。"""
+def ensure_shortcut(out=print, quiet: bool = False, root: Path = ROOT) -> str:
+    """状態を表す文字列を返す（doctor 用）。アイコンが変わっていれば作り直す。"""
     if not is_windows():
         return "（Windows 以外では作成しません）"
-    p = find_shortcut()
+    before = find_shortcut()
+    if before and _saved_signature(root) == icon_signature():
+        return f"あり: {before}"
+    p = create_desktop_shortcut(root=root, out=out if not quiet else (lambda s: None))
     if p:
-        return f"あり: {p}"
-    p = create_desktop_shortcut(out=out if not quiet else (lambda s: None))
-    if p:
-        return f"作成しました: {p}"
+        return f"アイコンを更新しました: {p}" if before else f"作成しました: {p}"
     return "作成できませんでした（start.bat をダブルクリックして起動できます）"

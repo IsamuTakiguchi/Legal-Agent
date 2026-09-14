@@ -1,3 +1,4 @@
 *.bat -text
 *.sh text eol=lf
 *.ps1 -text
+*.ico binary
