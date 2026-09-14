@@ -16,6 +16,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SHORTCUT_NAME = "Legal-Agent.lnk"
 ICON = Path(__file__).with_name("static") / "legal-agent.ico"
+# .lnk の作り方（アイコン以外）を変えたら上げる。既存の PC でも作り直される
+LNK_VERSION = "2"
 
 
 def icon_file() -> Path | None:
@@ -24,14 +26,14 @@ def icon_file() -> Path | None:
 
 
 def icon_signature() -> str:
-    """アイコンの内容の署名。変わったらショートカットを作り直す合図にする。"""
+    """アイコンの内容と .lnk の作り方の署名。変わったらショートカットを作り直す合図にする。"""
     icon = icon_file()
     if icon is None:
-        return ""
+        return f"v{LNK_VERSION}"
     try:
-        return hashlib.sha1(icon.read_bytes()).hexdigest()[:12]
+        return f"{hashlib.sha1(icon.read_bytes()).hexdigest()[:12]}-v{LNK_VERSION}"
     except OSError:
-        return ""
+        return f"v{LNK_VERSION}"
 
 
 def _state_file(root: Path) -> Path:
@@ -108,6 +110,7 @@ $s = $shell.CreateShortcut($path)
 $s.TargetPath = $Target
 $s.WorkingDirectory = $WorkDir
 $s.Description = "Legal-Agent"
+$s.WindowStyle = 7
 if ($Icon) { $s.IconLocation = "$Icon,0" }
 $s.Save()
 if (-not (Test-Path $path)) { exit 1 }
@@ -119,6 +122,7 @@ Set lnk = sh.CreateShortcut(WScript.Arguments(0) & "\Legal-Agent.lnk")
 lnk.TargetPath = WScript.Arguments(1)
 lnk.WorkingDirectory = WScript.Arguments(2)
 lnk.Description = "Legal-Agent"
+lnk.WindowStyle = 7
 If WScript.Arguments.Count > 3 Then lnk.IconLocation = WScript.Arguments(3) & ",0"
 lnk.Save
 """

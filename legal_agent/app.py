@@ -371,6 +371,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             index_wake.set()  # 許可した PDF をすぐ取得・索引する
         return {"allowed": n, "allow_all": approvals.allow_all, "indexing": bool(settings.pdf_dirs and settings.auto_index)}
 
+    @app.get("/legal-agent.ico", include_in_schema=False)
+    @app.get("/favicon.ico", include_in_schema=False)
+    async def app_icon() -> FileResponse:
+        """アプリウィンドウ（Chrome の --app）とタブのアイコン。ブラウザは /favicon.ico も見に来る。"""
+        return FileResponse(STATIC_DIR / "legal-agent.ico", media_type="image/x-icon")
+
     @app.get("/pdf/{doc_id}")
     async def pdf(doc_id: str) -> FileResponse:
         row = registry.local.db.get_document(doc_id)

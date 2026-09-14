@@ -11,11 +11,11 @@ from .config import get_settings
 
 def cmd_serve(args: argparse.Namespace) -> None:
     import threading
-    import webbrowser
 
     import uvicorn
 
     from .app import create_app
+    from .appwindow import open_app_window
 
     s = get_settings()
     host = args.host or s.host
@@ -23,8 +23,16 @@ def cmd_serve(args: argparse.Namespace) -> None:
     url = f"http://{host}:{port}/"
     print(f"Legal-Agent: {url}  (model={s.model}, effort={s.effort})", file=sys.stderr)
     if s.auto_open_browser and not getattr(args, "no_open", False):
-        threading.Timer(1.5, lambda: webbrowser.open(url)).start()
+        threading.Timer(1.5, lambda: open_app_window(url, s.app_window_dir, s.app_window)).start()
     uvicorn.run(create_app(s), host=host, port=port, log_level="info")
+
+
+def cmd_open(args: argparse.Namespace) -> None:
+    """起動済みのサーバーをアプリウィンドウで開く（start.ps1 から呼ばれる）。"""
+    from .appwindow import open_for
+
+    s = get_settings()
+    print("アプリウィンドウで開きました" if open_for(s) else "既定のブラウザで開きました")
 
 
 def cmd_update(args: argparse.Namespace) -> None:
@@ -172,6 +180,8 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--check", action="store_true", help="確認だけ行い、更新しない")
     p.add_argument("--force", action="store_true")
     p.set_defaults(fn=cmd_update)
+    p = sub.add_parser("open", help="起動中のサーバーをアプリウィンドウで開く（start.bat が使用）")
+    p.set_defaults(fn=cmd_open)
     p = sub.add_parser("usage", help="API の月額利用料（概算）を月別に表示")
     p.add_argument("--months", type=int, default=12)
     p.set_defaults(fn=cmd_usage)

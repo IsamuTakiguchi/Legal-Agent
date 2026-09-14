@@ -55,6 +55,8 @@ class Settings(BaseSettings):
     auto_download_cloud_pdfs: bool = False
     auto_login: bool = True
     auto_open_browser: bool = True
+    # Chrome / Edge の「アプリモード」で独立したウィンドウとして開く（false なら普通のタブ）
+    app_window: bool = True
     # Claude によるセレクタ自動発見（ログイン後の画面構造を解析して data/selectors.override.yaml に保存）
     auto_configure: bool = True
     # 自動更新: 起動時に GitHub の最新版を取り込み、稼働中も 1 時間ごとに確認する
@@ -102,6 +104,11 @@ class Settings(BaseSettings):
     @property
     def download_approvals_path(self) -> Path:
         return self.data_dir / "download_approvals.json"
+
+    @property
+    def app_window_dir(self) -> Path:
+        """アプリウィンドウ専用のブラウザプロファイル（普段使いの Chrome と混ざらないように）。"""
+        return self.data_dir / "app_window"
 
     @property
     def sessions_dir(self) -> Path:

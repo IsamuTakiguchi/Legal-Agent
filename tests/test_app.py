@@ -49,6 +49,10 @@ def test_status_and_sessions(client):
     assert c.get("/api/status").json()["usage_month"]["cost_usd"] == 5.0
     assert c.get("/api/usage?months=1").json()["this_month"]["by_model"]["claude-opus-5"]["calls"] == 1
     assert c.get("/").status_code == 200 and "Legal-Agent" in c.get("/").text
+    # アプリウィンドウのアイコン（.ico）が配信される
+    r = c.get("/legal-agent.ico")
+    assert r.status_code == 200 and r.content[:4] == b"\x00\x00\x01\x00"
+    assert "/legal-agent.ico" in c.get("/").text
 
 
 def test_chat_stream_with_stubbed_runner(client):

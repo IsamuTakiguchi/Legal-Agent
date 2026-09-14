@@ -70,9 +70,9 @@ if ($procs.Count -gt 0) {
         Write-Host "[server] update applied -> restarting the running server so it loads the new version"
         Stop-Server | Out-Null
     } elseif (Test-Server) {
-        Write-Host "[server] already running -> opening the browser"
+        Write-Host "[server] already running -> opening the app window"
+        & $Py -m legal_agent open
         Stop-Transcript | Out-Null
-        Start-Process $Url
         exit 0
     } else {
         Write-Host "[server] process exists but does not answer -> restarting it"
@@ -92,8 +92,8 @@ for ($i = 0; $i -lt 60; $i++) {
 }
 if ($up) {
     Write-Host "[server] up -> $Url"
+    & $Py -m legal_agent open
     Stop-Transcript | Out-Null
-    Start-Process $Url
     exit 0
 }
 Write-Host "[server] did not answer within 60 seconds"

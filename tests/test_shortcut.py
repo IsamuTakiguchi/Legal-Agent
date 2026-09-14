@@ -123,4 +123,5 @@ def test_icon_file_is_a_valid_ico():
         assert bits == 32 and off + size <= len(data)
         sizes.append(w or 256)
     assert {16, 32, 48, 256} <= set(sizes)
-    assert shortcut.icon_signature() and len(shortcut.icon_signature()) == 12
+    sig = shortcut.icon_signature()
+    assert sig.endswith(f"-v{shortcut.LNK_VERSION}") and len(sig.split("-")[0]) == 12
