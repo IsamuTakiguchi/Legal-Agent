@@ -1,4 +1,5 @@
-﻿# Stop the Legal-Agent server (Windows).
+﻿# Stop the Legal-Agent server (Windows). -Quiet: no message box (used by the installer).
+param([switch]$Quiet)
 
 $ErrorActionPreference = "Continue"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -16,5 +17,5 @@ Get-CimInstance Win32_Process -Filter "Name = 'python.exe'" | Where-Object { $_.
     Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
     $n++
 }
-Msg ("Legal-Agent を停止しました（" + $n + " プロセス）。")
+if (-not $Quiet) { Msg ("Legal-Agent を停止しました（" + $n + " プロセス）。") }
 exit 0

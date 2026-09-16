@@ -1,0 +1,67 @@
+name: installer
+
+# Windows 用インストーラ Legal-Agent-Setup.exe を作る。
+# NSIS は Linux でも Windows 用の .exe を作れるので Windows ランナーは不要。
+#   - タグ v* を push するとリリースに添付する（利用者はここから落とす）
+#   - 手動実行（workflow_dispatch）では成果物として置くだけ
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # バージョン番号をコミット数から作るので全履歴が要る
+
+      - name: NSIS を入れる
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq nsis
+
+      - name: インストーラをビルド
+        run: bash tools/build_installer.sh
+
+      - name: 中身を検査（必要なファイルが揃っているか・余計なものが入っていないか）
+        run: |
+          sudo apt-get install -y -qq p7zip-full
+          7z x -o/tmp/check -y dist/Legal-Agent-Setup.exe > /dev/null
+          python3 - <<'PY'
+          import re, subprocess, hashlib
+          from pathlib import Path
+          want = sorted(p for p in subprocess.run(["git","ls-files"],capture_output=True,text=True).stdout.split()
+                        if not re.match(r"^(tests|docs|tools|packaging|\.github)/", p))
+          base = Path("/tmp/check")
+          missing = [f for f in want if not (base/f).is_file()]
+          differs = [f for f in want if (base/f).is_file()
+                     and hashlib.sha1(Path(f).read_bytes()).hexdigest() != hashlib.sha1((base/f).read_bytes()).hexdigest()]
+          extra = sorted(str(p.relative_to(base)) for p in base.rglob("*")
+                         if p.is_file() and str(p.relative_to(base)).split("/")[0] in {"tests","docs","tools","packaging",".github"})
+          print(f"必要 {len(want)} / 欠け {len(missing)} / 内容相違 {len(differs)} / 余分 {len(extra)}")
+          assert not missing, f"欠けているファイル: {missing}"
+          assert not differs, f"内容が違うファイル: {differs}"
+          assert not extra, f"入ってはいけないファイル: {extra}"
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Legal-Agent-Setup
+          path: dist/Legal-Agent-Setup.exe
+
+      - name: リリースに添付
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" dist/Legal-Agent-Setup.exe \
+            --title "Legal-Agent ${{ github.ref_name }}" \
+            --notes "Legal-Agent-Setup.exe をダウンロードしてダブルクリックしてください。
+
+          管理者権限は不要です。%LOCALAPPDATA%\\Legal-Agent に導入します。
+          署名していないため「Windows によって PC が保護されました」と出ます。「詳細情報」→「実行」で進めてください。
+          警告を出したくない場合は README の 1 行コマンドをお使いください。"

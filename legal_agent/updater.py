@@ -116,8 +116,40 @@ def _reinstall(root: Path = ROOT, out=print) -> None:
         subprocess.run(pip_install_args(root, editable=False), check=False)
 
 
-def apply_zip(repo: str, sha: str, root: Path = ROOT, client: httpx.Client | None = None, out=print) -> int:
-    """archive ZIP を取得してアプリのファイルを上書きする。戻り値: 書き込んだファイル数。"""
+def prune_removed(root: Path, previous: list[str], current: set[str], out=print) -> int:
+    """前回配ったのに今回の配布物に無いファイルを消す（改名前の古いモジュールが残らないように）。
+
+    PRESERVE 配下（.env / data / python / logs など）には絶対に触れない。戻り値: 消した数。
+    """
+    removed = 0
+    for rel in previous:
+        path = Path(rel)
+        if rel in current or not path.parts or path.parts[0] in PRESERVE:
+            continue
+        dest = root / path
+        if not dest.is_file():
+            continue
+        try:
+            dest.unlink()
+            removed += 1
+        except OSError as e:  # noqa: PERF203
+            log.warning("古いファイルを削除できません %s: %s", dest, e)
+            continue
+        # 空になった中間フォルダも片付ける（root 自体には触れない）
+        for parent in dest.parents:
+            if parent == root or root not in parent.parents:
+                break
+            try:
+                parent.rmdir()
+            except OSError:
+                break
+    if removed:
+        out(f"不要になったファイルを {removed} 個削除しました")
+    return removed
+
+
+def apply_zip(repo: str, sha: str, root: Path = ROOT, client: httpx.Client | None = None, out=print) -> tuple[int, list[str]]:
+    """archive ZIP を取得してアプリのファイルを上書きする。戻り値: (書き込んだ数, 配布物の一覧)。"""
     own = client is None
     client = client or httpx.Client(timeout=120, headers={"User-Agent": UA}, follow_redirects=True)
     try:
@@ -129,6 +161,7 @@ def apply_zip(repo: str, sha: str, root: Path = ROOT, client: httpx.Client | Non
             client.close()
     before = _pyproject_hash(root)
     written = 0
+    shipped: list[str] = []
     with zipfile.ZipFile(io.BytesIO(data)) as zf:
         names = zf.namelist()
         prefix = names[0].split("/")[0] + "/" if names else ""
@@ -138,6 +171,7 @@ def apply_zip(repo: str, sha: str, root: Path = ROOT, client: httpx.Client | Non
             rel = Path(name[len(prefix):])
             if not rel.parts or rel.parts[0] in PRESERVE:
                 continue
+            shipped.append(rel.as_posix())
             dest = root / rel
             dest.parent.mkdir(parents=True, exist_ok=True)
             content = zf.read(name)
@@ -147,7 +181,7 @@ def apply_zip(repo: str, sha: str, root: Path = ROOT, client: httpx.Client | Non
             written += 1
     if _pyproject_hash(root) != before:
         _reinstall(root, out)
-    return written
+    return written, shipped
 
 
 def check_and_update(repo: str, branch: str, apply: bool = True, root: Path = ROOT, out=print, client: httpx.Client | None = None) -> UpdateStatus:
@@ -182,8 +216,10 @@ def check_and_update(repo: str, branch: str, apply: bool = True, root: Path = RO
         st.available = st.latest != st.current
         if st.available and apply:
             out(f"新しい版があります（{st.latest[:7]}）。更新しています…")
-            n = apply_zip(repo, st.latest, root, client, out)
-            _write_state({"repo": repo, "branch": used_branch, "commit": st.latest, "updated_at": time.time()})
+            n, shipped = apply_zip(repo, st.latest, root, client, out)
+            prune_removed(root, state.get("files", []), set(shipped), out)
+            _write_state({"repo": repo, "branch": used_branch, "commit": st.latest,
+                          "updated_at": time.time(), "files": shipped})
             st.applied = True
             st.current = st.latest
             st.message = f"更新しました（{n} ファイル、{st.latest[:7]}）"

@@ -9,3 +9,4 @@ data/
 install.log
 python/
 logs/
+dist/

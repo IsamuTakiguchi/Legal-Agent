@@ -38,7 +38,7 @@ function Set-PthFile {
 # ---- 1. relocate to AppHome ----
 if ($Here.TrimEnd("\") -ne $AppHome.TrimEnd("\")) {
     New-Item -ItemType Directory -Force -Path $AppHome | Out-Null
-    $rc = & robocopy.exe $Here $AppHome /E /XD .venv data .git __pycache__ .pytest_cache python logs /XF install.log .update.json /NFL /NDL /NJH /NJS /NP
+    $rc = & robocopy.exe $Here $AppHome /E /XD .venv data .git __pycache__ .pytest_cache python logs /XF install.log .update.json .env /NFL /NDL /NJH /NJS /NP
     if (-not (Test-Path (Join-Path $AppHome "install.ps1"))) {
         Msg ("アプリを " + $AppHome + " にコピーできませんでした。")
         exit 1

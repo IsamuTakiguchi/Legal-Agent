@@ -155,3 +155,59 @@ def test_reinstall_falls_back_to_normal_install(monkeypatch, tmp_path):
     monkeypatch.setattr(updater.subprocess, "run", fake_run)
     updater._reinstall(tmp_path, out=lambda s: None)
     assert len(calls) == 2 and "-e" in calls[0] and "-e" not in calls[1]
+
+
+def test_prune_removed_deletes_only_stale_app_files(tmp_path):
+    """改名などで上流から消えたファイルだけを消し、利用者のデータには触れない。"""
+    root = tmp_path
+    for rel in ["legal_agent/old_module.py", "legal_agent/sources/keep.py", "legal_agent/gone/a.py"]:
+        p = root / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text("x")
+    (root / ".env").write_text("SECRET=1")
+    (root / "data").mkdir()
+    (root / "data" / "index.sqlite3").write_bytes(b"db")
+
+    previous = ["legal_agent/old_module.py", "legal_agent/sources/keep.py", "legal_agent/gone/a.py",
+                ".env", "data/index.sqlite3", "legal_agent/never_existed.py"]
+    current = {"legal_agent/sources/keep.py"}
+    msgs: list[str] = []
+    removed = updater.prune_removed(root, previous, current, out=msgs.append)
+
+    assert removed == 2  # old_module.py と gone/a.py だけ
+    assert not (root / "legal_agent" / "old_module.py").exists()
+    assert not (root / "legal_agent" / "gone").exists()  # 空になったフォルダも消える
+    assert (root / "legal_agent" / "sources" / "keep.py").exists()
+    # PRESERVE 配下は前回の一覧に載っていても絶対に消さない
+    assert (root / ".env").read_text() == "SECRET=1"
+    assert (root / "data" / "index.sqlite3").read_bytes() == b"db"
+    assert any("2 個" in m for m in msgs)
+
+
+def test_apply_zip_returns_shipped_list_and_state_records_it(tmp_path, monkeypatch):
+    root = tmp_path
+    (root / "legal_agent").mkdir()
+    (root / "legal_agent" / "stale.py").write_text("old")
+    (root / "pyproject.toml").write_text("[project]\nname='x'\n")
+
+    files = {"legal_agent/app.py": b"new", "pyproject.toml": b"[project]\nname='x'\n"}
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        for name, content in files.items():
+            zf.writestr(f"Legal-Agent-abc/{name}", content)
+
+    class FakeClient:
+        def get(self, url):
+            class R:
+                content = buf.getvalue()
+
+                def raise_for_status(self):
+                    pass
+
+            return R()
+
+    written, shipped = updater.apply_zip("o/r", "abc", root, FakeClient(), out=lambda s: None)
+    assert written == 1 and sorted(shipped) == ["legal_agent/app.py", "pyproject.toml"]
+    # 前回の一覧に stale.py があれば、次の更新で消える
+    assert updater.prune_removed(root, ["legal_agent/stale.py"], set(shipped), out=lambda s: None) == 1
+    assert not (root / "legal_agent" / "stale.py").exists()
