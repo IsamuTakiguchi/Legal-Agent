@@ -54,12 +54,24 @@ jobs:
           path: dist/Legal-Agent-Setup.exe
 
       - name: リリースに添付
-        if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ github.ref_name }}" dist/Legal-Agent-Setup.exe \
-            --title "Legal-Agent ${{ github.ref_name }}" \
+          # タグ push ならそのタグ、手動実行ならビルドしたバージョンからタグを作る
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${{ github.ref_name }}"
+            TARGET=""
+          else
+            TAG="v$(cat dist/VERSION)"
+            TARGET="--target ${{ github.sha }}"
+          fi
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "既にある $TAG を更新します"
+            gh release upload "$TAG" dist/Legal-Agent-Setup.exe --clobber
+            exit 0
+          fi
+          gh release create "$TAG" dist/Legal-Agent-Setup.exe $TARGET \
+            --title "Legal-Agent $TAG" \
             --notes "Legal-Agent-Setup.exe をダウンロードしてダブルクリックしてください。
 
           管理者権限は不要です。%LOCALAPPDATA%\\Legal-Agent に導入します。

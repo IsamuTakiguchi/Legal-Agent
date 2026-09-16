@@ -43,4 +43,7 @@ makensis -V2 \
   "-DOUTFILE=$OUTFILE" \
   "$ROOT/packaging/legal-agent.nsi"
 
+# CI がタグ名に使えるよう、バージョンを書き出しておく（唯一の出どころ）
+printf '%s' "0.1.${COUNT}" > "$OUT_DIR/VERSION"
+
 echo "できました: $OUTFILE ($(du -h "$OUTFILE" | cut -f1))"
