@@ -86,6 +86,12 @@
   .body li { margin: 4px 0; }
   .body code { font-family: var(--mono); font-size: .88em; background: var(--soft); padding: 2px 5px; border-radius: 5px; }
   .body strong { font-weight: 600; }
+  .body .table-wrap { overflow-x: auto; margin: 0 0 14px; }
+  .body table { border-collapse: collapse; width: 100%; font-size: 14.5px; line-height: 1.7; }
+  .body th, .body td { border: 1px solid var(--line); padding: 8px 12px; text-align: left; vertical-align: top; min-width: 4.5em; }
+  /* 片方の列だけ極端に長いとき、見出し側の列が 1 文字ずつ折り返されるのを防ぐ */
+  .body th:first-child, .body td:first-child { min-width: 8em; }
+  .body th { background: var(--soft); font-weight: 600; }
   .body > :last-child { margin-bottom: 0; }
   .caret::after { content: ""; display: inline-block; width: 9px; height: 17px; background: var(--ink); margin-left: 2px; vertical-align: -3px; animation: blink 1s steps(2, start) infinite; }
   @keyframes blink { to { visibility: hidden; } }
@@ -327,13 +333,49 @@ function citeChip(ref) {
   if (!h) return `<span class="cite unknown" title="未検索の出典">[${esc(ref)}]</span>`;
   return `<span class="cite" title="${esc(h.title)}">${esc(h.title.slice(0, 18))}…</span>`;
 }
+// 表の 1 行を セルの配列にする（\| はセル区切りにしない）
+function tableCells(line) {
+  return line.trim().replace(/^\|/, "").replace(/\|$/, "")
+    .split(/(?<!\\)\|/).map(c => c.trim().replace(/\\\|/g, "|"));
+}
+// |---|:--:|---:| のような区切り行か
+function tableAligns(line) {
+  if (!/^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(line) || !line.includes("-")) return null;
+  const cells = tableCells(line);
+  if (!cells.length || !cells.every(c => /^:?-+:?$/.test(c))) return null;
+  return cells.map(c => (c.startsWith(":") && c.endsWith(":")) ? "center" : c.endsWith(":") ? "right" : c.startsWith(":") ? "left" : "");
+}
+function tableRow(cells, aligns, tag) {
+  return "<tr>" + aligns.map((a, i) => {
+    const style = a ? ` style="text-align:${a}"` : "";
+    return `<${tag}${style}>${inline(cells[i] ?? "")}</${tag}>`;
+  }).join("") + "</tr>";
+}
+
 function md(text) {
   const lines = text.split("\n"); let html = ""; let list = null; let para = [];
   const flush = () => { if (para.length) { html += `<p>${inline(para.join("\n")).replace(/\n/g, "<br>")}</p>`; para = []; } };
   const closeList = () => { if (list) { html += `</${list}>`; list = null; } };
-  for (const raw of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i];
     const line = raw.replace(/\s+$/, "");
     let m;
+    // 表: 見出し行の次が区切り行のときだけ表にする（流れてくる途中で崩れないように）
+    const aligns = line.includes("|") && i + 1 < lines.length ? tableAligns(lines[i + 1]) : null;
+    if (aligns) {
+      flush(); closeList();
+      // 列数は区切り行に合わせる（行ごとにセル数が違っても表が崩れない）
+      html += `<div class="table-wrap"><table><thead>${tableRow(tableCells(line), aligns, "th")}</thead><tbody>`;
+      i += 2;
+      for (; i < lines.length; i++) {
+        const row = lines[i].replace(/\s+$/, "");
+        if (!row.includes("|") || row.trim() === "") break;
+        html += tableRow(tableCells(row), aligns, "td");
+      }
+      i--;  // 表でなかった行はこのあと通常処理に回す
+      html += "</tbody></table></div>";
+      continue;
+    }
     if ((m = line.match(/^(#{1,4})\s+(.*)$/))) { flush(); closeList(); html += `<h${m[1].length + 1}>${inline(m[2])}</h${m[1].length + 1}>`; }
     else if ((m = line.match(/^\s*[-*・]\s+(.*)$/))) { flush(); if (list !== "ul") { closeList(); list = "ul"; html += "<ul>"; } html += `<li>${inline(m[1])}</li>`; }
     else if ((m = line.match(/^\s*\d+[.．)]\s+(.*)$/))) { flush(); if (list !== "ol") { closeList(); list = "ol"; html += "<ol>"; } html += `<li>${inline(m[1])}</li>`; }
