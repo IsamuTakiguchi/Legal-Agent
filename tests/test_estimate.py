@@ -63,3 +63,27 @@ def test_limit_keeps_recent(tmp_path):
     _session(store, [0.10, 0.10, 0.10])  # 新しい 3 問
     est = estimate(store, limit=3)
     assert est["samples"] == 3 and est["all"]["max_usd"] == 0.10
+
+
+def test_prefers_current_model(tmp_path):
+    from legal_agent.agent.estimate import MIN_SAME_MODEL
+
+    store = SessionStore(tmp_path / "sessions")
+    old = _session(store, [1.0] * 6, ts0=1000)  # 記録にモデル名の無い古い実績
+    # 新しいモデルの実績が少ないうちは、全体から出して「前のモデルの分を含む」と示す
+    s = _session(store, [0.2] * (MIN_SAME_MODEL - 1), ts0=2000)
+    for t in s.turns:
+        if t["role"] == "assistant":
+            t["usage"]["model"] = "claude-opus-5-5"
+    store.save(s)
+    est = estimate(store, model="claude-opus-5-5")
+    assert est["mixed_models"] is True and est["samples"] == 6 + MIN_SAME_MODEL - 1
+    assert "前のモデルの実績を含む" in format_estimate(est)
+    # 揃ったら新しいモデルの実績だけを使う
+    s.turns.append({"role": "user", "text": "q", "ts": 3000})
+    s.turns.append({"role": "assistant", "text": "a", "ts": 3000.5, "usage": {"cost_usd": 0.2, "model": "claude-opus-5-5"}})
+    store.save(s)
+    est = estimate(store, model="claude-opus-5-5")
+    assert est["mixed_models"] is False and est["samples"] == MIN_SAME_MODEL and est["all"]["median_usd"] == 0.2
+    # model を渡さなければ従来どおり
+    assert estimate(store)["samples"] == 6 + MIN_SAME_MODEL and old is not None

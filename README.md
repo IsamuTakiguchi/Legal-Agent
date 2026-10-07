@@ -10,7 +10,7 @@ LegalBrain エージェント / Legalscape のような使い勝手を、**自�
 | 判例 | TKC ローライブラリー（lawlibrary.jp） | **保留中**。アプリからはアクセスせず、手動検索用リンクを案内するだけ |
 | 文献 | LEGAL LIBRARY（legal-library.jp） | **保留中**。同上 |
 
-回答は Claude（既定 `claude-opus-5`）がツールを使って調査し、本文中の `[1]` `[2]` をクリックすると出典（判例の裁判所・日付・事件番号、書籍名・ページ、原典リンク）が右から開きます。画面は ChatGPT と同じ形（左に履歴、中央に会話、下に丸い入力欄）です。
+回答は Claude（既定は最新の `claude-opus-5-5`）がツールを使って調査し、本文中の `[1]` `[2]` をクリックすると出典（判例の裁判所・日付・事件番号、書籍名・ページ、原典リンク）が右から開きます。画面は ChatGPT と同じ形（左に履歴、中央に会話、下に丸い入力欄）です。
 
 ## 導入は 3 手順（Windows）
 
@@ -150,7 +150,7 @@ tests/              パーサ・索引・ツール・ランナー・API・疑似
 | 設定 | 効果 |
 |---|---|
 | `LEGAL_AGENT_EFFORT=medium` | 推論の深さを下げ、出力（思考）トークンを減らす |
-| `LEGAL_AGENT_MODEL=claude-sonnet-5` | 入力・出力とも Opus 5 の約 1/2.5 の単価 |
+| `LEGAL_AGENT_MODEL=claude-sonnet-5-5` | 入力・出力とも Opus 5.5 の半分の単価 |
 | `LEGAL_AGENT_MAX_FETCHES_PER_RUN=4` | 1 質問で読む本文の件数を減らす |
 | `LEGAL_AGENT_INITIAL_TEXT_CHARS` / `LEGAL_AGENT_MAX_TEXT_CHARS` | 判決文の初回・続き読みの文字数 |
 
@@ -173,6 +173,14 @@ pip install -e ".[dev]"
 pytest
 ```
 
-- `claude-opus-5` / Fable 系モデルではポリシー拒否時のサーバ側フォールバック（beta）を既定で有効にしています。
+- Opus 5 / 5.5・Sonnet 5.5・Fable 系モデルではポリシー拒否時のサーバ側フォールバック（beta）を既定で有効にしています。
   不要なら `LEGAL_AGENT_FALLBACKS_ENABLED=false`。
 - モデルの応答は adaptive thinking + `effort`（既定 high）で動きます。速さ優先なら `LEGAL_AGENT_EFFORT=medium`。
+  Opus 5.5 は API 側の既定 effort が medium なので、アプリは常に明示して送ります。
+- Opus 5.5・Sonnet 5.5・Fable 5.1 では思考ブロックが会話の履歴に結び付きます（過去のターンを書き換えると
+  後続の思考ブロックが無効）。アプリは履歴を追記のみで扱い、前の質問の思考ブロックは送る前に全部外しますが、
+  万一の食い違いで調査が止まらないよう `prefix_mismatch_behavior: "drop_block"`（beta）を付けています。
+  不要なら `LEGAL_AGENT_THINKING_DROP_ON_MISMATCH=false`。
+- 既定モデルを新しくしたときは、`legal_agent/env_migrate.py` の `RETIRED_DEFAULTS` に旧既定値を足してください。
+  起動時に、利用者の `.env` に残っている旧既定値（初回セットアップが書き込んだもの）だけを新しい既定値に書き換えます
+  （利用者が自分で選んだモデルは変えません）。

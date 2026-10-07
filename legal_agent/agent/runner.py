@@ -24,6 +24,9 @@ log = logging.getLogger(__name__)
 
 MAX_PAUSE_RESTARTS = 3
 
+# 思考ブロックが会話の履歴に結び付くモデル（過去のターンが変わると後続の思考ブロックが無効になる）
+THINKING_BINDING_MODELS = ("claude-opus-5-5", "claude-fable-5-1", "claude-sonnet-5-5")
+
 
 def serialize_block(block: Any) -> dict[str, Any] | None:
     """応答ブロックを次回リクエストで送り返せる dict にする。"""
@@ -78,9 +81,18 @@ class AgentRunner:
             "stream": True,
             "max_iterations": self.settings.max_iterations,
         }
-        if self.settings.fallbacks_enabled and self.settings.model.startswith(("claude-opus-5", "claude-fable")):
-            p["betas"] = ["server-side-fallback-2026-07-01"]
+        betas: list[str] = []
+        model = self.settings.model
+        if self.settings.fallbacks_enabled and model.startswith(("claude-opus-5", "claude-fable", "claude-sonnet-5-5")):
+            betas.append("server-side-fallback-2026-07-01")
             p["fallbacks"] = "default"
+        if self.settings.thinking_drop_on_mismatch and model.startswith(THINKING_BINDING_MODELS):
+            # 履歴は追記のみ（前の質問の思考ブロックは compact_history で全部落とす）なので通常は起きないが、
+            # 万一食い違ったときに 400 で調査が止まらないよう、その思考ブロックだけ捨てて続ける
+            betas.append("thinking-binding-controls-2026-08-01")
+            p["thinking"]["block_binding"] = {"prefix_mismatch_behavior": "drop_block"}
+        if betas:
+            p["betas"] = betas
         return p
 
     async def run(self, session: ChatSession, user_text: str, enabled_sources: set[str]) -> AsyncIterator[dict[str, Any]]:
@@ -134,6 +146,7 @@ class AgentRunner:
         session.turns.append({"role": "user", "text": user_text, "ts": time.time()})
 
         totals = UsageTotals()
+        answered_by = self.settings.model  # フォールバックで別モデルが答えたら、そのモデルの単価で計算する
         last_message = None
         restarts = 0
         while True:
@@ -156,12 +169,13 @@ class AgentRunner:
                 msg = await stream.get_final_message()
                 last_message = msg
                 totals.add(getattr(msg, "usage", None))
+                answered_by = getattr(msg, "model", None) or answered_by
                 try:
                     # フォールバックで別モデルが応答した場合も、実際に応答したモデルの単価で記録する
-                    self.ledger.record(getattr(msg, "usage", None), model=getattr(msg, "model", None) or self.settings.model, kind="chat", session_id=session.id)
+                    self.ledger.record(getattr(msg, "usage", None), model=answered_by, kind="chat", session_id=session.id)
                 except Exception as e:  # noqa: BLE001
                     log.warning("利用記録に失敗: %s", e)
-                ctx.emit({"type": "usage", **totals.to_dict(self.settings.model)})
+                ctx.emit({"type": "usage", **totals.to_dict(answered_by)})
                 messages.append({"role": "assistant", "content": serialize_content(msg.content)})
                 if msg.stop_reason == "tool_use":
                     resp = await runner.generate_tool_call_response()
@@ -183,11 +197,16 @@ class AgentRunner:
         text, cites = resolve_citations(final_text, ctx.hits)
         session.hits = {ref: h.to_dict() for ref, h in ctx.hits.items()}
         session.messages = messages
-        usage = totals.to_dict(self.settings.model)
+        usage = totals.to_dict(answered_by)
+        usage["model"] = answered_by  # 1 問の費用の目安を、同じモデルの実績だけで出すため
+        prev_cost = (session.usage or {}).get("cost_usd")
         cumulative = UsageTotals()
         cumulative.add_dict(session.usage)
         cumulative.add_dict(usage)
-        session.usage = cumulative.to_dict(self.settings.model)
+        session.usage = cumulative.to_dict()
+        # 累計の費用は 1 問ごとの費用の足し算（途中でモデルを変えても、過去の分を新しい単価で計算し直さない）
+        costs = [c for c in (prev_cost, usage.get("cost_usd")) if c is not None]
+        session.usage["cost_usd"] = sum(costs) if costs else None
         session.turns.append({"role": "assistant", "text": text, "citations": [c.to_dict() for c in cites], "ts": time.time(), "usage": usage})
         self.store.save(session)
         ctx.emit({

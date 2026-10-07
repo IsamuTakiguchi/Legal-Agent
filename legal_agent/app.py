@@ -68,7 +68,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     def _estimate() -> dict[str, Any]:
         """1 問あたりの費用の目安（過去の実績から）。質問のたびに変わるので都度計算してキャッシュする。"""
-        bg["estimate"] = estimate_cost(store, settings.usd_jpy)
+        bg["estimate"] = estimate_cost(store, settings.usd_jpy, model=settings.model)
         return bg["estimate"]
 
     def _refresh_dirs() -> None:

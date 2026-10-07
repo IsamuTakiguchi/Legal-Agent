@@ -73,7 +73,7 @@ def _trim(summary: dict[str, Any]) -> str:
 
 
 class AutoConfigurator:
-    def __init__(self, source, client: anthropic.AsyncAnthropic | None = None, model: str = "claude-opus-5", ledger=None):
+    def __init__(self, source, client: anthropic.AsyncAnthropic | None = None, model: str = "claude-opus-5-5", ledger=None):
         self.source = source  # BrowserSiteSource
         self.browser = source.browser
         self.site = source.name
@@ -94,7 +94,8 @@ class AutoConfigurator:
         content = instructions + ("\n\n前回の提案の問題点:\n" + feedback if feedback else "") + "\n\nDOM 要約(JSON):\n" + _trim(summary)
         resp = await self.client.messages.parse(
             model=self.model,
-            max_tokens=4000,
+            # 思考が常に有効なモデルでは思考も max_tokens に数えるので、構造化出力が切れないよう余裕を持たせる
+            max_tokens=16000,
             system=SYSTEM,
             messages=[{"role": "user", "content": content}],
             output_format=model_cls,

@@ -17,7 +17,7 @@ def client(settings, monkeypatch):
 def test_status_and_sessions(client):
     c, app = client
     st = c.get("/api/status").json()
-    assert st["model"] == "claude-opus-5"
+    assert st["model"] == "claude-opus-5-5"
     assert set(st["sources"]) == {"courts", "tkc", "local", "legal_library"}
     assert st["index"]["documents"] == 0
     assert c.get("/api/sessions").json() == []

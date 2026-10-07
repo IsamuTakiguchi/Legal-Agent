@@ -104,3 +104,19 @@ async def test_local_page_cap(settings, tmp_path):
     assert "あ" * 50 in d.text and "あ" * 51 not in d.text and "50 字で省略" in d.text
     d = await src.fetch("b", page=2, span=0)
     assert "省略" not in d.text
+
+
+def test_price_for_longest_match():
+    from legal_agent.agent.costs import price_for
+
+    # claude-opus-5-5 を claude-opus-5 の単価と取り違えない（前方一致の最長のキーを使う）
+    assert price_for("claude-opus-5-5") == (4.0, 20.0, 0.2, 5.0)
+    assert price_for("claude-opus-5") == (5.0, 25.0, 0.5, 6.25)
+    assert price_for("claude-sonnet-5-5") == (2.0, 10.0, 0.2, 2.5)
+    assert price_for("claude-fable-5-1")[2] == 0.25 and price_for("claude-fable-5")[2] == 1.0
+    assert price_for("claude-opus-4-8-20260101") == price_for("claude-opus-4-8")
+    assert price_for("mystery-model") is None
+    # 1M 入力 + 1M 出力 = $4 + $20
+    t = UsageTotals()
+    t.add(SimpleNamespace(input_tokens=1_000_000, output_tokens=1_000_000, cache_read_input_tokens=0, cache_creation_input_tokens=0))
+    assert t.cost_usd("claude-opus-5-5") == 24.0

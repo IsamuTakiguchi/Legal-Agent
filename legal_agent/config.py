@@ -18,11 +18,15 @@ class Settings(BaseSettings):
     # Anthropic API キー。接頭辞なしの ANTHROPIC_API_KEY を環境変数と .env の両方から読む
     anthropic_api_key: str = Field(default="", validation_alias="ANTHROPIC_API_KEY")
 
-    model: str = "claude-opus-5"
+    # 既定は最新の Opus。既定を変えるときは env_migrate.RETIRED_DEFAULTS に旧既定値を足す
+    # （初回セットアップが .env に書き込んだ旧既定値を、起動時に新しい既定値へ移行するため）
+    model: str = "claude-opus-5-5"
     effort: str = "high"
     max_tokens: int = 64000
-    # Claude Opus 5 / Fable のポリシー拒否時にサーバ側で別モデルへ切替（beta）
+    # Claude Opus 5 / 5.5 / Fable のポリシー拒否時にサーバ側で別モデルへ切替（beta）
     fallbacks_enabled: bool = True
+    # 履歴の食い違いで思考ブロックが無効になったとき、エラーで止めずにそのブロックだけ捨てて続ける（beta）
+    thinking_drop_on_mismatch: bool = True
 
     # 環境変数はカンマ区切りの文字列（JSON ではない）。NoDecode で自前の分割に任せる
     pdf_dirs: Annotated[list[Path], NoDecode] = Field(default_factory=list)
@@ -63,7 +67,7 @@ class Settings(BaseSettings):
     auto_update: bool = True
     update_repo: str = "IsamuTakiguchi/Legal-Agent"
     update_branch: str = "claude/legal-search-agent-app-9xw9z8"
-    autoconf_model: str = "claude-opus-5"
+    autoconf_model: str = "claude-opus-5-5"
 
     # 利用料の表示: 円換算レートと月額予算（USD、0 で警告なし）
     usd_jpy: float = 150.0

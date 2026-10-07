@@ -509,7 +509,7 @@ function renderCostHint() {
     const rate = est.usd_jpy || 150;
     const kind = state.sessionId ? "この調査を続けた場合の 1 問の目安" : "1 問あたりの目安";
     box.innerHTML = `<button type="button">${kind} 約 ${usd(s.median_usd)}（約 ${jpy(s.median_usd * rate)}）` +
-      `・よくある範囲 ${usd(s.low_usd)}〜${usd(s.high_usd)}（直近 ${s.n} 問の実績）</button>`;
+      `・よくある範囲 ${usd(s.low_usd)}〜${usd(s.high_usd)}（直近 ${s.n} 問の実績${est.mixed_models ? "。前のモデルの分を含む" : ""}）</button>`;
   }
   box.querySelector("button").onclick = openUsage;
 }
@@ -550,7 +550,7 @@ async function openUsage() {
     if (models.length > 1) html += `<div class="hint" style="margin-top:6px">今月のモデル別: ` + models.map(([m, v]) => `${esc(m)} ${usd(v.cost_usd)}（${n(v.calls)} 回）`).join("、") + `</div>`;
     const est = j.estimate;
     if (est && est.samples) {
-      html += `<div style="margin-top:16px;font-weight:600;font-size:14px">1 問あたりの費用（直近 ${est.samples} 問の実績）</div>`;
+      html += `<div style="margin-top:16px;font-weight:600;font-size:14px">1 問あたりの費用（直近 ${est.samples} 問の実績${est.mixed_models ? "。モデルを切り替えた直後のため前のモデルの分を含む" : ""}）</div>`;
       html += `<table><thead><tr><th>区分</th><th>件数</th><th>中央値</th><th>よくある範囲（10〜90%）</th><th>最大</th><th>中央値の円換算</th></tr></thead><tbody>`;
       for (const [key, label] of [["first", "新しい調査の 1 問目"], ["followup", "続きの質問"], ["all", "全体"]]) {
         const s2 = est[key]; if (!s2) continue;

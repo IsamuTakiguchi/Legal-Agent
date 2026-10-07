@@ -11,6 +11,8 @@ from typing import Any
 
 # 新しい質問ほど今の設定（モデル・effort）を反映しているので、直近だけを見る
 DEFAULT_LIMIT = 30
+# 今のモデルで答えた実績がこの件数以上あれば、それだけで目安を出す（モデルを変えた直後は前のモデルの実績で代用）
+MIN_SAME_MODEL = 5
 
 
 def question_samples(store: Any) -> list[dict[str, Any]]:
@@ -35,6 +37,7 @@ def question_samples(store: Any) -> list[dict[str, Any]]:
                 "ts": float(t.get("ts") or s.updated_at or 0),
                 "total_input": int(u.get("total_input") or 0),
                 "output": int(u.get("output") or 0),
+                "model": u.get("model"),  # 記録の無い古い実績は None
             })
     out.sort(key=lambda d: d["ts"], reverse=True)
     return out
@@ -64,12 +67,26 @@ def _stats(samples: list[dict[str, Any]]) -> dict[str, Any] | None:
     }
 
 
-def estimate(store: Any, usd_jpy: float = 150.0, limit: int = DEFAULT_LIMIT) -> dict[str, Any]:
-    """直近 limit 問の実績から、1 問あたりの費用の目安を返す。実績が無ければ samples=0。"""
-    samples = question_samples(store)[:limit]
+def estimate(store: Any, usd_jpy: float = 150.0, limit: int = DEFAULT_LIMIT, model: str | None = None) -> dict[str, Any]:
+    """直近 limit 問の実績から、1 問あたりの費用の目安を返す。実績が無ければ samples=0。
+
+    model を渡すと、そのモデルで答えた実績が MIN_SAME_MODEL 問以上あればそれだけを使う。
+    足りなければ全体から出し、mixed_models=True（前のモデルの実績を含む）とする。
+    """
+    everything = question_samples(store)
+    samples = everything[:limit]
+    mixed = False
+    if model:
+        same = [s for s in everything if s["model"] == model]
+        if len(same) >= MIN_SAME_MODEL:
+            samples = same[:limit]
+        else:
+            mixed = any(s["model"] != model for s in samples)
     return {
         "samples": len(samples),
         "usd_jpy": usd_jpy,
+        "model": model,
+        "mixed_models": mixed,
         "all": _stats(samples),
         "first": _stats([s for s in samples if not s["followup"]]),
         "followup": _stats([s for s in samples if s["followup"]]),
@@ -97,4 +114,5 @@ def format_estimate(est: dict[str, Any] | None) -> str:
         yen = round(st["median_usd"] * rate)
         lines.append(f"  {label}: 中央値 約 ${st['median_usd']:.2f}（約 {yen:,} 円）"
                      f"／よくある範囲 ${st['low_usd']:.2f}〜${st['high_usd']:.2f}（{st['n']} 問）")
-    return "1 問あたりの目安（直近の実績）:\n" + "\n".join(lines)
+    note = "（前のモデルの実績を含む）" if est.get("mixed_models") else ""
+    return f"1 問あたりの目安（直近の実績）{note}:\n" + "\n".join(lines)

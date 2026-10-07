@@ -17,6 +17,11 @@ def cmd_serve(args: argparse.Namespace) -> None:
     from .app import create_app
     from .appwindow import open_app_window
 
+    from .env_migrate import migrate_env
+
+    # 設定を読む前に、旧既定モデルのままの .env を最新の既定へ移行する（get_settings はキャッシュされるため先に）
+    for c in migrate_env():
+        print(f".env を更新しました: {c}", file=sys.stderr)
     s = get_settings()
     host = args.host or s.host
     port = args.port or s.port
@@ -67,7 +72,7 @@ def cmd_usage(args: argparse.Namespace) -> None:
     ledger.backfill_from_sessions(store, s.model)
     print(format_table(ledger.months(limit=args.months), s.usd_jpy))
     print()
-    print(format_estimate(estimate(store, s.usd_jpy)))
+    print(format_estimate(estimate(store, s.usd_jpy, model=s.model)))
 
 
 def cmd_doctor(args: argparse.Namespace) -> None:

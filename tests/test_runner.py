@@ -112,7 +112,7 @@ async def test_runner_end_to_end(settings, tmp_path):
     assert store2.get(session.id).messages == session.messages
     # リクエストパラメータ
     p = calls[0]
-    assert p["model"] == "claude-opus-5" and p["stream"] is True and p["thinking"]["type"] == "adaptive"
+    assert p["model"] == "claude-opus-5-5" and p["stream"] is True and p["thinking"]["type"] == "adaptive"
     assert p["fallbacks"] == "default" and p["output_config"] == {"effort": "high"}
     assert p["cache_control"] == {"type": "ephemeral"} and p["max_iterations"] == 24
     assert p["messages"][0]["content"].startswith("解雇の有効性は？")
@@ -122,7 +122,7 @@ async def test_runner_end_to_end(settings, tmp_path):
     assert "usage" in types
     # 台帳: usage のあった 2 ターン目だけ記録され、月集計に反映される
     ms = runner.ledger.month_summary()
-    assert ms["calls"] == 1 and ms["input"] == 10 and ms["output"] == 5 and ms["by_model"]["claude-opus-5"]["calls"] == 1
+    assert ms["calls"] == 1 and ms["input"] == 10 and ms["output"] == 5 and ms["by_model"]["claude-opus-5-5"]["calls"] == 1
     # 2 問目: 前の質問のツール結果は圧縮されてから送られ、セッションに残る履歴も圧縮済み
     client2, calls2 = make_client()
     runner2 = AgentRunner(settings, StubRegistry(settings), store, client=client2)
@@ -146,3 +146,49 @@ async def test_runner_reports_error(settings, tmp_path):
 def test_serialize_content_drops_unknown():
     blocks = [Ev(type="text", text="a"), Ev(type="weird"), Ev(type="redacted_thinking", data="zz")]
     assert serialize_content(blocks) == [{"type": "text", "text": "a"}, {"type": "redacted_thinking", "data": "zz"}]
+
+
+def test_request_params_for_models(settings):
+    def params(**kw):
+        return AgentRunner(settings.model_copy(update=kw), None, None, client=object(), ledger=object())._request_params()
+
+    p = params()  # 既定（claude-opus-5-5）
+    assert p["model"] == "claude-opus-5-5" and p["output_config"] == {"effort": "high"}
+    assert p["betas"] == ["server-side-fallback-2026-07-01", "thinking-binding-controls-2026-08-01"]
+    assert p["fallbacks"] == "default"
+    assert p["thinking"] == {"type": "adaptive", "display": "summarized", "block_binding": {"prefix_mismatch_behavior": "drop_block"}}
+    # Opus 5: フォールバックのみ（思考ブロックの結び付きは無い）
+    p = params(model="claude-opus-5")
+    assert p["betas"] == ["server-side-fallback-2026-07-01"] and "block_binding" not in p["thinking"]
+    # 古いモデル: beta なし
+    p = params(model="claude-sonnet-4-6")
+    assert "betas" not in p and "fallbacks" not in p and "block_binding" not in p["thinking"]
+    # 設定で切れる
+    p = params(thinking_drop_on_mismatch=False, fallbacks_enabled=False)
+    assert "betas" not in p and "block_binding" not in p["thinking"]
+
+
+async def test_turn_records_answering_model(settings, tmp_path):
+    """フォールバックで別モデルが答えたら、そのモデル名と単価で記録する。"""
+    store = SessionStore(tmp_path / "sessions")
+
+    class FallbackRunner(FakeRunner):
+        def __aiter__(self):
+            inner = super().__aiter__()
+
+            async def gen():
+                async for st in inner:
+                    st._final.model = "claude-opus-5"  # 応答したのはフォールバック先
+                    yield st
+            return gen()
+
+    client = SimpleNamespace(beta=SimpleNamespace(messages=SimpleNamespace(tool_runner=lambda **kw: FallbackRunner(**kw))))
+    runner = AgentRunner(settings, StubRegistry(settings), store, client=client)
+    session = store.create()
+    events = [e async for e in runner.run(session, "q", {"courts"})]
+    usage = events[-1]["usage"]
+    assert usage["model"] == "claude-opus-5"
+    # 10*5 + 5*25 = 175 / 1e6（Opus 5 の単価）
+    assert abs(usage["cost_usd"] - 175 / 1_000_000) < 1e-12
+    assert session.turns[-1]["usage"]["model"] == "claude-opus-5"
+    assert session.usage["cost_usd"] == usage["cost_usd"]

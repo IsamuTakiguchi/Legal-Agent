@@ -103,7 +103,7 @@ def _run(after_install: bool, out) -> int:
         from .agent.estimate import estimate, format_estimate
         from .agent.sessions import SessionStore
 
-        out(format_estimate(estimate(SessionStore(s.sessions_dir), s.usd_jpy)))
+        out(format_estimate(estimate(SessionStore(s.sessions_dir), s.usd_jpy, model=s.model)))
     except Exception as e:  # noqa: BLE001
         out(f"API 利用料: 読めません（{e}）")
 

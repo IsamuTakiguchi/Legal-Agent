@@ -13,6 +13,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from .config import Settings
+
 ENV_PATH = Path(".env")
 API_KEY_URL = "https://console.anthropic.com/settings/keys"
 
@@ -70,8 +72,10 @@ def apply_setup(api_key: str | None, pdf_dirs: list[str] | None, env_path: Path 
         env["ANTHROPIC_API_KEY"] = api_key.strip()
     if pdf_dirs is not None:
         env["LEGAL_AGENT_PDF_DIRS"] = ",".join(str(p) for p in pdf_dirs if str(p).strip())
-    env.setdefault("LEGAL_AGENT_MODEL", "claude-opus-5")
-    env.setdefault("LEGAL_AGENT_EFFORT", "high")
+    # 既定値は config.Settings に一本化（モデルを更新したとき二重に直さなくて済むように）
+    defaults = Settings.model_fields
+    env.setdefault("LEGAL_AGENT_MODEL", defaults["model"].default)
+    env.setdefault("LEGAL_AGENT_EFFORT", defaults["effort"].default)
     env.setdefault("LEGAL_AGENT_DATA_DIR", "./data")
     write_env(env_path, env)
     if env.get("ANTHROPIC_API_KEY"):
